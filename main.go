@@ -22,4 +22,5 @@ func getConfig() (*config.Config, error) {
 	}
 	cfg, err := config.LoadFromEnv()
 	return &cfg, err
+
 }

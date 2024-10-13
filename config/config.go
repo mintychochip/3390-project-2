@@ -14,38 +14,47 @@ type Config struct {
 }
 
 func Load(path string) (Config, error) {
-	var config Config
+	cfg, err := loadFromFile(path)
+	if err != nil {
+		return Config{}, err
+	}
+	return cfg, validateConfig(&cfg)
+}
+
+func loadFromFile(path string) (Config, error) {
+	var cfg Config
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return config, err
+		return cfg, err
 	}
-	err = json.Unmarshal(data, &config)
-	return config, err
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return cfg, err
+	}
+	return cfg, nil
 }
 
 func LoadFromEnv() (Config, error) {
-	user := os.Getenv("USER")
-	password := os.Getenv("PASSWORD")
-	host := os.Getenv("HOST")
-	name := os.Getenv("NAME")
+	cfg := Config{
+		User:     os.Getenv("USER"),
+		Password: os.Getenv("PASSWORD"),
+		Host:     os.Getenv("HOST"),
+		Name:     os.Getenv("NAME"),
+	}
+	return cfg, validateConfig(&cfg)
+}
 
-	if user == "" {
-		return Config{}, errors.New("USER environment variable is not set")
+func validateConfig(cfg *Config) error {
+	if cfg.User == "" {
+		return errors.New("'User' is not set")
 	}
-	if password == "" {
-		return Config{}, errors.New("PASSWORD environment variable is not set")
+	if cfg.Password == "" {
+		return errors.New("'Password' is not set")
 	}
-	if host == "" {
-		return Config{}, errors.New("HOST environment variable is not set")
+	if cfg.Host == "" {
+		return errors.New("'Host' is not set")
 	}
-	if name == "" {
-		return Config{}, errors.New("NAME environment variable is not set")
+	if cfg.Name == "" {
+		return errors.New("'Name' is not set")
 	}
-
-	return Config{
-		User:     user,
-		Password: password,
-		Host:     host,
-		Name:     name,
-	}, nil
+	return nil
 }
