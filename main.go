@@ -1,6 +1,7 @@
 package main
 
 import (
+	"api-3390/auth"
 	"api-3390/config"
 	"api-3390/database"
 	"fmt"
@@ -13,8 +14,15 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	_, err = database.Connection(cfg)
-
+	db, err := database.Connection(cfg)
+	b, err := auth.AuthenticateUserByName(db, "justin the bustin", "pp")
+	if err != nil {
+		db.Close()
+		log.Fatal(err)
+	}
+	if b {
+		fmt.Println("You are authenticated")
+	}
 	fmt.Println(cfg)
 }
 func getConfig() (*config.Config, error) {

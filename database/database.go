@@ -3,18 +3,13 @@ package database
 import (
 	"api-3390/config"
 	"database/sql"
-	"fmt"
 	_ "github.com/lib/pq"
 	"log"
 	_ "modernc.org/sqlite"
 )
 
-func getConnectionString(cfg *config.Config, driverName string) string {
-	if driverName == "sqlite" {
-		return cfg.Path
-	}
-	return fmt.Sprintf("user=%s password=%s dbname=%s host=%s port=%d sslmode=disable",
-		cfg.User, cfg.Password, cfg.DBName, cfg.Host, cfg.Port)
+func getConnectionString(cfg *config.Config) string {
+	return cfg.Path
 }
 
 //	func InsertData(db *sql.DB) error {
@@ -27,14 +22,12 @@ func getConnectionString(cfg *config.Config, driverName string) string {
 // }
 func Connection(cfg *config.Config) (*sql.DB, error) {
 	driverName := "sqlite"
-	var connStr = getConnectionString(cfg, driverName)
+	var connStr = getConnectionString(cfg)
 	db, err := sql.Open(driverName, connStr)
 	if err != nil {
 		return nil, err
 	}
 	//TODO: handle this
-	defer db.Close()
-
 	if err := db.Ping(); err != nil {
 		return nil, err
 	}
