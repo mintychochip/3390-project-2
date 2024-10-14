@@ -1,18 +1,55 @@
 package user
 
 import (
+	"crypto/rand"
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/golang-jwt/jwt/v4"
 	"golang.org/x/crypto/bcrypt"
 	"regexp"
+	"time"
 )
 
-type AuthService struct {
-	DB *sql.DB
+type AuthenticationService struct {
+	DB          *sql.DB
+	SigningKey  []byte
+	TokenExpire time.Duration
 }
 
-func (auth *AuthService) RegisterUser(u *User) error {
+func AuthService(db *sql.DB, duration time.Duration) (*AuthenticationService, error) {
+	key, err := generateSignedKey()
+	if err != nil {
+		return nil, err
+	}
+	auth := AuthenticationService{
+		DB:          db,
+		TokenExpire: duration,
+		SigningKey:  key,
+	}
+	return &auth, nil
+}
+func (auth *AuthenticationService) ValidateToken(tokenString string) (*jwt.Token, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("Unexpected signing method")
+		}
+		return auth.SigningKey, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return token, nil
+}
+func generateSignedKey() ([]byte, error) {
+	key := make([]byte, SigningKeyLength)
+	if _, err := rand.Read(key); err != nil {
+		return []byte{}, err
+	}
+	return key, nil
+}
+
+func (auth *AuthenticationService) RegisterUser(u *User) error {
 	b := validEmail(u.Email)
 	if !b {
 		return fmt.Errorf("invalid email was attempted to be registered: '%s'", u.Email)
@@ -30,7 +67,7 @@ func (auth *AuthService) RegisterUser(u *User) error {
 	_, err = stmt.Exec(u.Name, u.Email, hashedPassword)
 	return err
 }
-func (auth *AuthService) ExistsUser(u *User) (bool, error) {
+func (auth *AuthenticationService) ExistsUser(u *User) (bool, error) {
 	var exists bool
 	if u.Name == "" && u.Email == "" {
 		return false, errors.New("username and email were not provided")
@@ -44,12 +81,27 @@ func (auth *AuthService) ExistsUser(u *User) (bool, error) {
 	return exists, nil
 }
 
-func (auth *AuthService) AuthenticateUser(u *User) (bool, error) {
-	b, err := compareHashedPassword(auth.DB, u)
-	if err != nil {
-		return false, err
+func (auth *AuthenticationService) AuthenticateUser(u *User) (string, error) {
+	if b, err := compareHashedPassword(auth.DB, u); err != nil {
+		return "", err
+	} else if !b {
+		return "", errors.New("invalid credentials")
 	}
-	return b, nil
+	token, err := auth.generateToken(u)
+	if err != nil {
+		return "", err
+	}
+	return token, nil
+}
+
+func (auth *AuthenticationService) generateToken(u *User) (string, error) {
+	claims := jwt.MapClaims{
+		"id":    u.Name,
+		"email": u.Email,
+		"exp":   time.Now().Add(auth.TokenExpire).Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(auth.SigningKey)
 }
 
 func validEmail(email string) bool {

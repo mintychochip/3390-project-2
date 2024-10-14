@@ -11,6 +11,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"time"
 )
 
 const UploadPath = "./uploads/"
@@ -30,19 +31,23 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	as := user.AuthService{DB: db}
-	//fs := user.FileService{DB: db}
+	authService, err := user.AuthService(db, time.Hour)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(authService.SigningKey)
 	r := chi.NewRouter()
-	cfg.ApplicationMiddleWare(r)
+	r.Use(cfg.ApplicationMiddleWare)
+	r.With()
 	r.Get("/", renderUploadForm)
-	r.Post("/api/files/", handleFileUpload)
+	r.Post("/api/user/files/{id}", handleFileUpload)
 	r.Post("/api/auth/login", func(w http.ResponseWriter, r *http.Request) {
 		var u user.User
 		if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		b, err := as.ExistsUser(&u)
+		b, err := authService.ExistsUser(&u)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -51,16 +56,15 @@ func main() {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		authenticate, err := as.AuthenticateUser(&u)
+		token, err := authService.AuthenticateUser(&u)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if !authenticate {
-			http.Error(w, "user not authorized", http.StatusUnauthorized)
-			return
-		}
+		handleGetUserData(w, r)
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"token": token})
 	})
 	r.Post("/api/auth/register", func(w http.ResponseWriter, r *http.Request) {
 		var u user.User
@@ -68,7 +72,7 @@ func main() {
 			http.Error(w, fmt.Errorf("failed to register user: %w", err).Error(), http.StatusBadRequest)
 			return
 		}
-		b, err := as.ExistsUser(&u)
+		b, err := authService.ExistsUser(&u)
 		if err != nil {
 			http.Error(w, fmt.Errorf("failed to register user: %w", err).Error(), http.StatusBadRequest)
 			return
@@ -77,7 +81,7 @@ func main() {
 			http.Error(w, "failed to register user: user already exists", http.StatusConflict)
 			return
 		}
-		if err := as.RegisterUser(&u); err != nil {
+		if err := authService.RegisterUser(&u); err != nil {
 			http.Error(w, fmt.Errorf("failed to register user: %w", err).Error(), http.StatusInternalServerError)
 			return
 		}
@@ -87,6 +91,10 @@ func main() {
 	if err := http.ListenAndServe(cfg.Address(), r); err != nil {
 		log.Fatal(err)
 	}
+}
+func handleGetUserData(w http.ResponseWriter, r *http.Request) {
+	tokenString := r.Header.Get("Authorization")
+	fmt.Println(tokenString)
 }
 func renderUploadForm(w http.ResponseWriter, r *http.Request) {
 	log.Println("Rendering upload form")

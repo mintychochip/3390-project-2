@@ -13,6 +13,7 @@ const UserFileTable = `CREATE TABLE IF NOT EXISTS user_files (
     upload_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 )`
+const SigningKeyLength uint8 = 32
 
 type User struct {
 	ID       uint64 `json:"id"`
