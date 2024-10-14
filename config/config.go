@@ -1,8 +1,11 @@
 package config
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	_ "github.com/lib/pq"
+	_ "modernc.org/sqlite"
 	"os"
 	"strconv"
 )
@@ -17,8 +20,21 @@ type Config struct {
 	Path     string `json:"path"`
 }
 
-func (c *Config) Address() string {
-	return fmt.Sprintf("%s:%d", c.Host, c.Port)
+func (cfg *Config) Connection() (*sql.DB, error) {
+	driverName := "sqlite"
+	var connStr = cfg.Path
+	db, err := sql.Open(driverName, connStr)
+	if err != nil {
+		return nil, err
+	}
+	if err := db.Ping(); err != nil {
+		return nil, err
+	}
+	return db, nil
+}
+
+func (cfg *Config) Address() string {
+	return fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 }
 func Load(path string) (*Config, error) {
 	cfg, err := loadFromFile(path)
@@ -55,20 +71,3 @@ func LoadFromEnv() (*Config, error) {
 	cfg.Port = uint32(port)
 	return &cfg, nil
 }
-
-//
-//func validateConfig(cfg *Config) error {
-//	if cfg.User == "" {
-//		return errors.New("'User' is not set")
-//	}
-//	if cfg.Password == "" {
-//		return errors.New("'Password' is not set")
-//	}
-//	if cfg.Host == "" {
-//		return errors.New("'Host' is not set")
-//	}
-//	if cfg.DBName == "" {
-//		return errors.New("'DBName' is not set")
-//	}
-//	return nil
-//}

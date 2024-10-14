@@ -41,35 +41,50 @@ func Register(db *sql.DB, user User) error {
 	return nil
 }
 
+/*
+*
+Returns nil if the user does exist
+*/
+func UserExists(db *sql.DB, u *User) (bool, error) {
+	var exists bool
+	if u.Name == "" && u.Email == "" {
+		return false, errors.New("username and email were not provided")
+	}
+
+	err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE name = ? OR email = ?)", u.Name, u.Email).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("error checking user existence: %s", err)
+	}
+
+	return exists, nil
+}
+func UserAuthenticate(db *sql.DB, u *User) (bool, error) {
+	b, err := compareHashedPassword(db, u)
+	if err != nil {
+		return false, err
+	}
+	return b, nil
+}
+
 func validEmail(email string) bool {
 	const emailRegex = `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
 	re := regexp.MustCompile(emailRegex)
 
 	return re.MatchString(email)
 }
-func compareHashedPassword(db *sql.DB, field, identifier, password string) (bool, error) {
+func compareHashedPassword(db *sql.DB, u *User) (bool, error) {
 	var hashed string
-	query := fmt.Sprintf("SELECT password FROM users WHERE %s = ?", field)
-
-	err := db.QueryRow(query, identifier).Scan(&hashed)
-	fmt.Println(hashed)
+	err := db.QueryRow("SELECT password FROM users WHERE name = ? OR email = ?", u.Name, u.Email).Scan(&hashed)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return false, nil
 		}
-		return false, fmt.Errorf("failed to locate user: %s", err)
+		return false, fmt.Errorf("failed to locate u: %s", err)
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(hashed), []byte(password))
+	err = bcrypt.CompareHashAndPassword([]byte(hashed), []byte(u.Password))
 	if err != nil {
 		return false, nil
 	}
 	return true, nil
-}
-func Authenticate(db *sql.DB, field, identifier, password string) (bool, error) {
-	b, err := compareHashedPassword(db, field, identifier, password)
-	if err != nil {
-		return false, err
-	}
-	return b, nil
 }

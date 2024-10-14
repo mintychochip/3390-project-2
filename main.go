@@ -3,7 +3,6 @@ package main
 import (
 	"api-3390/auth"
 	"api-3390/config"
-	"api-3390/database"
 	"encoding/json"
 	"fmt"
 	"github.com/go-chi/chi/v5"
@@ -12,49 +11,72 @@ import (
 	"os"
 )
 
+var userTable = `CREATE TABLE IF NOT EXISTS users(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name VARCHAR(32) NOT NULL UNIQUE,
+    email VARCHAR(128) NOT NULL UNIQUE,
+    password VARCHAR(128) NOT NULL
+    );`
+
 func main() {
 
 	cfg, err := getConfig()
 	if err != nil {
 		log.Fatal(err)
 	}
-	db, err := database.Connection(cfg)
+	db, err := cfg.Connection()
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = db.Exec(userTable)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	r := chi.NewRouter()
 	r.Post("/api/auth", func(w http.ResponseWriter, r *http.Request) {
-		type LoginRequest struct {
-			Field      string `json:"field"`
-			Identifier string `json:"identifier"`
-			Password   string `json:"password"`
-		}
-		var request LoginRequest
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			http.Error(w, "Invalid request", http.StatusBadRequest)
+		var u auth.User
+		if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if err := json.NewEncoder(w).Encode(request); err != nil {
-			http.Error(w, "Error registering user", http.StatusInternalServerError)
-			return
-		}
-		authenticate, err := auth.Authenticate(db, request.Field, request.Identifier, request.Password)
+		b, err := auth.UserExists(db, &u)
 		if err != nil {
-			http.Error(w, "Error authenticating user", http.StatusInternalServerError)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if !b {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		authenticate, err := auth.UserAuthenticate(db, &u)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if !authenticate {
-			http.Error(w, "Authentication failed", http.StatusUnauthorized)
+			http.Error(w, "user not authorized", http.StatusUnauthorized)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
 	})
 	r.Post("/api/register", func(w http.ResponseWriter, r *http.Request) {
-		var user auth.User
-		if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-			http.Error(w, "Invalid request", http.StatusBadRequest)
+		var u auth.User
+		if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
+			http.Error(w, fmt.Errorf("failed to register user: %w", err).Error(), http.StatusBadRequest)
 			return
 		}
-		if err := auth.Register(db, user); err != nil {
-			var str = fmt.Errorf("Error registering user: %w", err).Error()
-			http.Error(w, str, http.StatusInternalServerError)
+		b, err := auth.UserExists(db, &u)
+		if err != nil {
+			http.Error(w, fmt.Errorf("failed to register user: %w", err).Error(), http.StatusBadRequest)
+			return
+		}
+		if b {
+			http.Error(w, "failed to register user: user already exists", http.StatusConflict)
+			return
+		}
+		if err := auth.Register(db, u); err != nil {
+			http.Error(w, fmt.Errorf("failed to register user: %w", err).Error(), http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(http.StatusCreated)
