@@ -1,5 +1,11 @@
 package models
 
+type Users struct {
+	ID       string `db:"id" json:"id"`
+	Name     string `db:"name" json:"name"`
+	Email    string `db:"email" json:"email"`
+	Password string `db:"password" json:"password"`
+}
 type Prices struct {
 	CMSCertificationNum string  `db:"cms_certification_num" json:"cms_certification_num"`
 	Payer               string  `db:"payer" json:"payer"`

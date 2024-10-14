@@ -2,5 +2,8 @@
   "user": "user",
   "host": "asd",
   "password" : "asd",
-  "name" : "asd"
+  "db_name" : "asd",
+  "port" : 800,
+  "ssl_mode" : true,
+  "path": "resources/sqlite.db"
 }
