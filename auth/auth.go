@@ -20,7 +20,7 @@ type UserRecord struct {
 	Password string `db:"password" json:"password"`
 }
 
-func RegisterUser(db *sql.DB, user User) error {
+func Register(db *sql.DB, user User) error {
 	b := validEmail(user.Email)
 	if !b {
 		return fmt.Errorf("invalid email was attempted to be registered: '%s'", user.Email)
@@ -52,6 +52,7 @@ func compareHashedPassword(db *sql.DB, field, identifier, password string) (bool
 	query := fmt.Sprintf("SELECT password FROM users WHERE %s = ?", field)
 
 	err := db.QueryRow(query, identifier).Scan(&hashed)
+	fmt.Println(hashed)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return false, nil
@@ -65,15 +66,8 @@ func compareHashedPassword(db *sql.DB, field, identifier, password string) (bool
 	}
 	return true, nil
 }
-func AuthenticateUserByName(db *sql.DB, name, password string) (bool, error) {
-	b, err := compareHashedPassword(db, "name", name, password)
-	if err != nil {
-		return false, err
-	}
-	return b, nil
-}
-func AuthenticateUserByEmail(db *sql.DB, email, password string) (bool, error) {
-	b, err := compareHashedPassword(db, "email", email, password)
+func Authenticate(db *sql.DB, field, identifier, password string) (bool, error) {
+	b, err := compareHashedPassword(db, field, identifier, password)
 	if err != nil {
 		return false, err
 	}

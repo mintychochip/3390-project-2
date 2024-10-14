@@ -17,6 +17,9 @@ type Config struct {
 	Path     string `json:"path"`
 }
 
+func (c *Config) Address() string {
+	return fmt.Sprintf("%s:%d", c.Host, c.Port)
+}
 func Load(path string) (*Config, error) {
 	cfg, err := loadFromFile(path)
 	if err != nil {
