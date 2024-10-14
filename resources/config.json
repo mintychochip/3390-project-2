@@ -5,5 +5,6 @@
   "db_name" : "asd",
   "port" : 8080,
   "ssl_mode" : true,
-  "path": "resources/sqlite.db"
+  "path": "resources/sqlite.db",
+  "application_key": "test"
 }

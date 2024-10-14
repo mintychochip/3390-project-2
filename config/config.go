@@ -4,22 +4,44 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/go-chi/chi/v5"
 	_ "github.com/lib/pq"
+	"log"
 	_ "modernc.org/sqlite"
+	"net/http"
 	"os"
 	"strconv"
 )
 
 type Config struct {
-	User     string `json:"user"`
-	Password string `json:"password"`
-	Host     string `json:"host"`
-	DBName   string `json:"db_name"`
-	Port     uint32 `json:"port"`
-	SSLMode  bool   `json:"ssl_mode"`
-	Path     string `json:"path"`
+	User           string `json:"user"`
+	Password       string `json:"password"`
+	Host           string `json:"host"`
+	DBName         string `json:"db_name"`
+	Port           uint32 `json:"port"`
+	SSLMode        bool   `json:"ssl_mode"`
+	Path           string `json:"path"`
+	ApplicationKey string `json:"application_key"`
 }
 
+func (cfg *Config) ApplicationMiddleWare(r *chi.Mux) {
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			apiKey := r.Header.Get("X-API-KEY")
+			if apiKey != cfg.ApplicationKey {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				clientIP := r.RemoteAddr
+				if apiKey == "" {
+					log.Printf("Unauthorized access attempt from IP: %s with empty key", clientIP)
+					return
+				}
+				log.Printf("Unauthorized access attempt from IP: %s with key: %s\n", clientIP, apiKey)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
+}
 func (cfg *Config) Connection() (*sql.DB, error) {
 	driverName := "sqlite"
 	var connStr = cfg.Path
