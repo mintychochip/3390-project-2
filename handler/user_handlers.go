@@ -61,7 +61,7 @@ func (a *API) HandleUpdateUserById(w http.ResponseWriter, r *http.Request) {
 	if updatedUser.Password != "" {
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(updatedUser.Password), bcrypt.DefaultCost)
 		if err != nil {
-			http.Error(w, "Error hashing password", http.StatusInternalServerError)
+			http.Error(w, "ErrorMessage hashing password", http.StatusInternalServerError)
 			return
 		}
 		updatedUser.Password = string(hashedPassword) // Update the password field with the hashed password
@@ -100,6 +100,18 @@ func (a *API) HandleGetUserById(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
+func (a *API) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
+	var user container.User
+	err := json.NewDecoder(r.Body).Decode(&user)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	err = a.Services.UserService.CreateUser(&user)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
 func getUserId(r *http.Request) (uint32, error) {
 	val, ok := r.Context().Value("user_id").(string)
 	if !ok {
@@ -110,10 +122,4 @@ func getUserId(r *http.Request) (uint32, error) {
 		return 0, err
 	}
 	return uint32(id), nil
-}
-func getContextValue(r *http.Request, key string) string {
-	if val, ok := r.Context().Value(key).(string); ok {
-		return val
-	}
-	return ""
 }

@@ -47,13 +47,15 @@ func main() {
 	r.Use(cfg.ApplicationMiddleWare)
 	r.Route("/users", func(r chi.Router) {
 		r.Get("/", api.HandleGetAllUsers)
-
+		r.With(middleware.InterceptJson(map[string][]predicate.Predicate[string]{
+			"email": {predicate.IsNotEmpty, predicate.EmailIsValid},
+		})).Post("/", api.HandleCreateUser)
 		r.Route("/{user_id}", func(r chi.Router) {
 			r.Use(middleware.URLParam("user_id", predicate.AllowedCharacters, predicate.NonNegativePredicate))
 			r.Get("/", api.HandleGetUserById)
 			r.Delete("/", api.HandleDeleteUserById)
-			r.With(middleware.InterceptJson(map[string]predicate.Predicate[string]{
-				"email": predicate.EmailIsValid,
+			r.With(middleware.InterceptJson(map[string][]predicate.Predicate[string]{
+				"email": {predicate.EmailIsValid},
 			})).Put("/", api.HandleUpdateUserById)
 		})
 	})
@@ -62,70 +64,70 @@ func main() {
 	//	fileName := chi.URLParam(r, "file_name")
 	//	intId, err := strconv.Atoi(userId)
 	//	if err != nil {
-	//		http.Error(w, err.Error(), http.StatusBadRequest)
+	//		http.ErrorMessage(w, err.ErrorMessage(), http.StatusBadRequest)
 	//		return
 	//	}
 	//	file, err := fileService.GetUserFile(uint32(intId), fileName)
 	//	if err != nil {
-	//		http.Error(w, err.Error(), http.StatusBadRequest)
+	//		http.ErrorMessage(w, err.ErrorMessage(), http.StatusBadRequest)
 	//		return
 	//	}
 	//	w.Header().Set("Content-Type", "application/json")
 	//	w.WriteHeader(http.StatusOK)
 	//	if err := json.NewEncoder(w).Encode(file); err != nil {
-	//		http.Error(w, "Error encoding response", http.StatusInternalServerError)
+	//		http.ErrorMessage(w, "ErrorMessage encoding response", http.StatusInternalServerError)
 	//	}
 	//})
 	//r.Get("/api/files/{user_id}", func(w http.ResponseWriter, r *http.Request) {
 	//	userId := chi.URLParam(r, "user_id")
 	//	intId, err := strconv.Atoi(userId)
 	//	if err != nil {
-	//		http.Error(w, err.Error(), http.StatusInternalServerError)
+	//		http.ErrorMessage(w, err.ErrorMessage(), http.StatusInternalServerError)
 	//		return
 	//	}
 	//	if files, err := fileService.GetAllUserFiles(uint32(intId)); err != nil {
-	//		http.Error(w, err.Error(), http.StatusInternalServerError)
+	//		http.ErrorMessage(w, err.ErrorMessage(), http.StatusInternalServerError)
 	//		return
 	//	} else {
 	//		w.Header().Set("Content-Type", "application/json")
 	//		w.WriteHeader(http.StatusOK)
 	//		if err := json.NewEncoder(w).Encode(files); err != nil {
-	//			http.Error(w, "Error encoding response", http.StatusInternalServerError)
+	//			http.ErrorMessage(w, "ErrorMessage encoding response", http.StatusInternalServerError)
 	//		}
 	//	}
 	//})
 	//r.Post("/api/auth/login", func(w http.ResponseWriter, r *http.Request) {
 	//	var u user.User
 	//	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
-	//		http.Error(w, err.Error(), http.StatusBadRequest)
+	//		http.ErrorMessage(w, err.ErrorMessage(), http.StatusBadRequest)
 	//		return
 	//	}
 	//	b, err := authService.UserIsRegistered(&u)
 	//	if err != nil {
-	//		http.Error(w, err.Error(), http.StatusBadRequest)
+	//		http.ErrorMessage(w, err.ErrorMessage(), http.StatusBadRequest)
 	//		return
 	//	}
 	//	if !b {
-	//		http.Error(w, "cannot authenticate, user does not exist", http.StatusConflict)
+	//		http.ErrorMessage(w, "cannot authenticate, user does not exist", http.StatusConflict)
 	//		return
 	//	}
 	//
 	//	if b, err = authService.AuthenticateUser(&u); err != nil {
-	//		http.Error(w, err.Error(), http.StatusInternalServerError)
+	//		http.ErrorMessage(w, err.ErrorMessage(), http.StatusInternalServerError)
 	//		return
 	//	} else if !b {
-	//		http.Error(w, "invalid credentials", http.StatusConflict)
+	//		http.ErrorMessage(w, "invalid credentials", http.StatusConflict)
 	//		return
 	//	}
 	//
 	//	if token, err := authService.GenerateToken(&u); err != nil {
-	//		http.Error(w, err.Error(), http.StatusInternalServerError)
+	//		http.ErrorMessage(w, err.ErrorMessage(), http.StatusInternalServerError)
 	//		return
 	//	} else {
 	//		w.Header().Set("Content-Type", "application/json")
 	//		w.WriteHeader(http.StatusOK)
 	//		if err := json.NewEncoder(w).Encode(map[string]string{"token": token}); err != nil {
-	//			http.Error(w, err.Error(), http.StatusInternalServerError)
+	//			http.ErrorMessage(w, err.ErrorMessage(), http.StatusInternalServerError)
 	//		}
 	//		return
 	//	}
@@ -133,20 +135,20 @@ func main() {
 	//r.Post("/api/auth/register", func(w http.ResponseWriter, r *http.Request) {
 	//	var u user.User
 	//	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
-	//		http.Error(w, fmt.Errorf("failed to register user: %w", err).Error(), http.StatusBadRequest)
+	//		http.ErrorMessage(w, fmt.Errorf("failed to register user: %w", err).ErrorMessage(), http.StatusBadRequest)
 	//		return
 	//	}
 	//	b, err := authService.UserIsRegistered(&u)
 	//	if err != nil {
-	//		http.Error(w, fmt.Errorf("failed to register user: %w", err).Error(), http.StatusBadRequest)
+	//		http.ErrorMessage(w, fmt.Errorf("failed to register user: %w", err).ErrorMessage(), http.StatusBadRequest)
 	//		return
 	//	}
 	//	if b {
-	//		http.Error(w, "failed to register user: user already exists", http.StatusConflict)
+	//		http.ErrorMessage(w, "failed to register user: user already exists", http.StatusConflict)
 	//		return
 	//	}
 	//	if err := authService.RegisterUser(&u); err != nil {
-	//		http.Error(w, fmt.Errorf("failed to register user: %w", err).Error(), http.StatusInternalServerError)
+	//		http.ErrorMessage(w, fmt.Errorf("failed to register user: %w", err).ErrorMessage(), http.StatusInternalServerError)
 	//		return
 	//	}
 	//	w.WriteHeader(http.StatusCreated)
