@@ -6,5 +6,5 @@
   "port" : 8080,
   "ssl_mode" : true,
   "path": "resources/sqlite.db",
-  "application_key": "test"
+  "reference_key": "test-2"
 }

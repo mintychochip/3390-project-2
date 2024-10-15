@@ -12,20 +12,20 @@ import (
 )
 
 type Config struct {
-	User           string `json:"user"`
-	Password       string `json:"password"`
-	Host           string `json:"host"`
-	DBName         string `json:"db_name"`
-	Port           uint32 `json:"port"`
-	SSLMode        bool   `json:"ssl_mode"`
-	Path           string `json:"path"`
-	ApplicationKey string `json:"application_key"`
+	User         string `json:"user"`
+	Password     string `json:"password"`
+	Host         string `json:"host"`
+	DBName       string `json:"db_name"`
+	Port         uint32 `json:"port"`
+	SSLMode      bool   `json:"ssl_mode"`
+	Path         string `json:"path"`
+	ReferenceKey string `json:"reference_key"`
 }
 
 func (cfg *Config) ApplicationMiddleWare(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		apiKey := r.Header.Get("X-API-KEY")
-		if apiKey != cfg.ApplicationKey {
+		if apiKey != cfg.ReferenceKey {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			clientIP := r.RemoteAddr
 			if apiKey == "" {

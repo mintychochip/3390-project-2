@@ -11,6 +11,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -31,7 +32,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	_, err = db.Exec(user.UserFileTable)
+	if err != nil {
+		log.Fatal(err)
+	}
 	authService, err := user.AuthService(db, time.Hour)
+	fileService := user.FileService{DB: db}
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -39,21 +45,37 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(cfg.ApplicationMiddleWare)
 	r.With()
-	r.Get("/", renderUploadForm)
-	r.Post("/api/user/files/{id}", handleFileUpload)
+	r.Get("/api/files/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		intId, err := strconv.Atoi(id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		files, err := fileService.GetFiles(uint64(intId))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(files); err != nil {
+			http.Error(w, "Error encoding response", http.StatusInternalServerError)
+		}
+	})
 	r.Post("/api/auth/login", func(w http.ResponseWriter, r *http.Request) {
 		var u user.User
 		if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		b, err := authService.ExistsUser(&u)
+		b, err := authService.ItemExists(&u)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		if !b {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			http.Error(w, "cannot authenticate, user does not exist", http.StatusConflict)
 			return
 		}
 		token, err := authService.AuthenticateUser(&u)
@@ -61,10 +83,11 @@ func main() {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		handleGetUserData(w, r)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"token": token})
+		if err := json.NewEncoder(w).Encode(map[string]string{"token": token}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	})
 	r.Post("/api/auth/register", func(w http.ResponseWriter, r *http.Request) {
 		var u user.User
@@ -72,7 +95,7 @@ func main() {
 			http.Error(w, fmt.Errorf("failed to register user: %w", err).Error(), http.StatusBadRequest)
 			return
 		}
-		b, err := authService.ExistsUser(&u)
+		b, err := authService.ItemExists(&u)
 		if err != nil {
 			http.Error(w, fmt.Errorf("failed to register user: %w", err).Error(), http.StatusBadRequest)
 			return

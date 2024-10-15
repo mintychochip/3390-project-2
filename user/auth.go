@@ -17,30 +17,55 @@ type AuthenticationService struct {
 	TokenExpire time.Duration
 }
 
+func (auth *AuthenticationService) ItemExists(obj *User) (bool, error) {
+	if obj.Name == "" && obj.Email == "" {
+		return false, errors.New("username and email were not provided")
+	}
+	query, args := auth.ExistsQuery(obj)
+	return itemExists(auth.DB, query, args)
+}
+func (auth *AuthenticationService) ExistsQuery(obj *User) (string, []interface{}) {
+	return "SELECT EXISTS(SELECT 1 FROM users WHERE name = ? OR email = ?)", []interface{}{obj.Name, obj.Email}
+}
+
 func AuthService(db *sql.DB, duration time.Duration) (*AuthenticationService, error) {
 	key, err := generateSignedKey()
 	if err != nil {
 		return nil, err
 	}
-	auth := AuthenticationService{
+	return &AuthenticationService{
 		DB:          db,
 		TokenExpire: duration,
 		SigningKey:  key,
-	}
-	return &auth, nil
+	}, nil
 }
 func (auth *AuthenticationService) ValidateToken(tokenString string) (*jwt.Token, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("Unexpected signing method")
+			return nil, errors.New("unexpected signing method")
 		}
 		return auth.SigningKey, nil
 	})
+
 	if err != nil {
-		return nil, err
+		return nil, err // You could also check for specific error types here
 	}
+
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		// Check claims like exp, nbf, etc.
+		if exp, ok := claims["exp"].(float64); ok {
+			if time.Unix(int64(exp), 0).Before(time.Now()) {
+				return nil, errors.New("token is expired")
+			}
+		}
+		// Additional claims checks can be added here
+	} else {
+		return nil, errors.New("invalid token claims")
+	}
+
 	return token, nil
 }
+
 func generateSignedKey() ([]byte, error) {
 	key := make([]byte, SigningKeyLength)
 	if _, err := rand.Read(key); err != nil {
@@ -67,19 +92,6 @@ func (auth *AuthenticationService) RegisterUser(u *User) error {
 	_, err = stmt.Exec(u.Name, u.Email, hashedPassword)
 	return err
 }
-func (auth *AuthenticationService) ExistsUser(u *User) (bool, error) {
-	var exists bool
-	if u.Name == "" && u.Email == "" {
-		return false, errors.New("username and email were not provided")
-	}
-
-	err := auth.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE name = ? OR email = ?)", u.Name, u.Email).Scan(&exists)
-	if err != nil {
-		return false, fmt.Errorf("error checking user existence: %s", err)
-	}
-
-	return exists, nil
-}
 
 func (auth *AuthenticationService) AuthenticateUser(u *User) (string, error) {
 	if b, err := compareHashedPassword(auth.DB, u); err != nil {
@@ -96,7 +108,8 @@ func (auth *AuthenticationService) AuthenticateUser(u *User) (string, error) {
 
 func (auth *AuthenticationService) generateToken(u *User) (string, error) {
 	claims := jwt.MapClaims{
-		"id":    u.Name,
+		"id":    u.ID,
+		"name":  u.Name,
 		"email": u.Email,
 		"exp":   time.Now().Add(auth.TokenExpire).Unix(),
 	}

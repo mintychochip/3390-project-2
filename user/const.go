@@ -8,8 +8,8 @@ const UserTable = `CREATE TABLE IF NOT EXISTS users(
     );`
 const UserFileTable = `CREATE TABLE IF NOT EXISTS user_files (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER
-    file_name TEXT NOT NULL,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
     upload_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 )`
