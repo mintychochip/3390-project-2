@@ -4,12 +4,14 @@ go 1.23.2
 
 require (
 	github.com/go-chi/chi/v5 v5.1.0
+	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/lib/pq v1.10.9
 	golang.org/x/crypto v0.28.0
 	modernc.org/sqlite v1.33.1
 )
 
 require (
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
