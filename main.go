@@ -44,7 +44,25 @@ func main() {
 	fmt.Println(authService.SigningKey)
 	r := chi.NewRouter()
 	r.Use(cfg.ApplicationMiddleWare)
-	r.With()
+	r.Get("/api/files/{user_id}/{file_name}", func(w http.ResponseWriter, r *http.Request) {
+		userId := chi.URLParam(r, "user_id")
+		fileName := chi.URLParam(r, "file_name")
+		intId, err := strconv.Atoi(userId)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		file, err := fileService.GetUserFile(uint32(intId), fileName)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(file); err != nil {
+			http.Error(w, "Error encoding response", http.StatusInternalServerError)
+		}
+	})
 	r.Get("/api/files/{user_id}", func(w http.ResponseWriter, r *http.Request) {
 		userId := chi.URLParam(r, "user_id")
 		intId, err := strconv.Atoi(userId)
@@ -52,16 +70,15 @@ func main() {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		fmt.Println(intId)
-		files, err := fileService.GetAllUserFiles(uint32(intId))
-		if err != nil {
+		if files, err := fileService.GetAllUserFiles(uint32(intId)); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(files); err != nil {
-			http.Error(w, "Error encoding response", http.StatusInternalServerError)
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			if err := json.NewEncoder(w).Encode(files); err != nil {
+				http.Error(w, "Error encoding response", http.StatusInternalServerError)
+			}
 		}
 	})
 	r.Post("/api/auth/login", func(w http.ResponseWriter, r *http.Request) {
@@ -79,15 +96,25 @@ func main() {
 			http.Error(w, "cannot authenticate, user does not exist", http.StatusConflict)
 			return
 		}
-		token, err := authService.AuthenticateUser(&u)
-		if err != nil {
+
+		if b, err = authService.AuthenticateUser(&u); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
+		} else if !b {
+			http.Error(w, "invalid credentials", http.StatusConflict)
+			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(map[string]string{"token": token}); err != nil {
+
+		if token, err := authService.GenerateToken(&u); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			if err := json.NewEncoder(w).Encode(map[string]string{"token": token}); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+			return
 		}
 	})
 	r.Post("/api/auth/register", func(w http.ResponseWriter, r *http.Request) {

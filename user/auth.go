@@ -12,7 +12,7 @@ import (
 )
 
 type AuthenticationService struct {
-	*GenericService[User, uint32]
+	*genericService[User, uint32]
 	SigningKey  []byte
 	TokenExpire time.Duration
 }
@@ -37,9 +37,8 @@ func (a *AuthenticationService) RegisterUser(obj *User) error {
 	if err != nil {
 		return err
 	}
-	obj.Password = string(hashed)
 	return a.insertItem(obj, func(obj *User) (string, []interface{}) {
-		return "INSERT INTO users (name,email,password) VALUES (?,?,?)", []interface{}{obj.Name, obj.Email, obj.Password}
+		return "INSERT INTO users (name,email,password) VALUES (?,?,?)", []interface{}{obj.Name, obj.Email, string(hashed)}
 	})
 }
 func NewAuthenticationService(db *sql.DB, duration time.Duration) (*AuthenticationService, error) {
@@ -48,7 +47,7 @@ func NewAuthenticationService(db *sql.DB, duration time.Duration) (*Authenticati
 		return nil, err
 	}
 	return &AuthenticationService{
-		GenericService: &GenericService[User, uint32]{
+		genericService: &genericService[User, uint32]{
 			db: db,
 		},
 		TokenExpire: duration,
@@ -90,23 +89,17 @@ func generateSignedKey() ([]byte, error) {
 	return key, nil
 }
 
-func (a *AuthenticationService) AuthenticateUser(u *User) (string, error) {
-	if b, err := compareHashedPassword(a.db, u); err != nil {
-		return "", err
-	} else if !b {
-		return "", errors.New("invalid credentials")
-	}
-	token, err := a.generateToken(u)
+func (a *AuthenticationService) AuthenticateUser(u *User) (bool, error) {
+	b, err := compareHashedPassword(a.db, u)
 	if err != nil {
-		return "", err
+		return false, err
 	}
-	return token, nil
+	return b, nil
 }
 
-func (a *AuthenticationService) generateToken(u *User) (string, error) {
+func (a *AuthenticationService) GenerateToken(u *User) (string, error) {
 	claims := jwt.MapClaims{
 		"id":    u.ID,
-		"name":  u.Name,
 		"email": u.Email,
 		"exp":   time.Now().Add(a.TokenExpire).Unix(),
 	}
