@@ -36,8 +36,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	authService, err := user.AuthService(db, time.Hour)
-	fileService := user.FileService{DB: db}
+	authService, err := user.NewAuthenticationService(db, time.Hour)
+	fileService := user.NewFileService(db)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -45,14 +45,15 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(cfg.ApplicationMiddleWare)
 	r.With()
-	r.Get("/api/files/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "id")
-		intId, err := strconv.Atoi(id)
+	r.Get("/api/files/{user_id}", func(w http.ResponseWriter, r *http.Request) {
+		userId := chi.URLParam(r, "user_id")
+		intId, err := strconv.Atoi(userId)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		files, err := fileService.GetFiles(uint64(intId))
+		fmt.Println(intId)
+		files, err := fileService.GetAllUserFiles(uint32(intId))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -69,7 +70,7 @@ func main() {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		b, err := authService.ItemExists(&u)
+		b, err := authService.UserIsRegistered(&u)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -95,7 +96,7 @@ func main() {
 			http.Error(w, fmt.Errorf("failed to register user: %w", err).Error(), http.StatusBadRequest)
 			return
 		}
-		b, err := authService.ItemExists(&u)
+		b, err := authService.UserIsRegistered(&u)
 		if err != nil {
 			http.Error(w, fmt.Errorf("failed to register user: %w", err).Error(), http.StatusBadRequest)
 			return

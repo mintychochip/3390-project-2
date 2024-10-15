@@ -2,65 +2,50 @@ package user
 
 import (
 	"database/sql"
-	"errors"
 	"time"
 )
 
 type File struct {
-	ID         uint64    `json:"id"`
-	UserID     uint64    `json:"user_id"`
+	ID         uint32    `json:"id"`
+	UserID     uint32    `json:"user_id"`
 	Name       string    `json:"name"`
 	UploadTime time.Time `json:"upload_time"`
 }
 
 type FileService struct {
-	DB *sql.DB
+	*GenericService[File, uint32]
 }
 
-func (fs *FileService) GetFiles(userId uint64) ([]*File, error) {
-	stmt, err := fs.DB.Prepare("SELECT id, user_id, name, upload_time FROM user_files WHERE user_id=?")
-	if err != nil {
-		return nil, err
+func NewFileService(db *sql.DB) *FileService {
+	return &FileService{
+		&GenericService[File, uint32]{
+			db: db,
+		},
 	}
-	defer stmt.Close()
-	rows, err := stmt.Query(userId)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var files []*File
-
-	for rows.Next() {
-		var File File
-		if err := rows.Scan(&File.ID, &File.UserID, &File.Name, &File.UploadTime); err != nil {
-			return nil, err
-		}
-		files = append(files, &File)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return files, nil
 }
-func (fs *FileService) UserHasFile(f *File) (bool, error) {
-	var exists bool
-	row := fs.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM user_files WHERE name = ?)", f.Name).Scan(&exists)
-	if row != nil {
-		return false, errors.New("user has no file")
-	}
-	return exists, nil
+func (fs *FileService) GetUserFile(fileName string, userId uint32) (*File, error) {
+	return fs.getItem([]interface{}{fileName, userId}, "SELECT id, upload_time FROM user_files WHERE name = ? AND user_id = ?",
+		func(t *File, rows *sql.Rows) error {
+			err := rows.Scan(&t.ID, &t.UploadTime)
+			if err != nil {
+				return err
+			}
+			t.Name = fileName
+			t.UserID = userId
+			return nil
+		})
 }
-func (fs *FileService) AssignUserFile(f *File, u *User) (bool, error) {
-	stmt, err := fs.DB.Prepare("INSERT INTO user_files (user_id,name) VALUES (?,?)")
-	if err != nil {
-		return false, err
-	}
-	defer stmt.Close()
-	_, err = stmt.Exec(u.ID, f.Name)
-	if err != nil {
-		return false, err
-	}
-	return true, nil
+func (fs *FileService) GetAllUserFiles(userId uint32) ([]*File, error) {
+	return fs.getAllItems([]interface{}{userId}, "SELECT id,name,upload_time FROM user_files WHERE user_id = ?",
+		func(t *File, rows *sql.Rows) error {
+			err := rows.Scan(&t.ID, &t.Name, &t.UploadTime)
+			if err != nil {
+				return err
+			}
+			t.UserID = userId
+			return nil
+		})
+}
+func (fs *FileService) existsQuery(obj *File) (string, []interface{}) {
+	return "SELECT EXISTS(SELECT 1 FROM user_files WHERE id = ?)", []interface{}{obj.ID}
 }

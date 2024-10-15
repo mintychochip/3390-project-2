@@ -12,39 +12,55 @@ import (
 )
 
 type AuthenticationService struct {
-	DB          *sql.DB
+	*GenericService[User, uint32]
 	SigningKey  []byte
 	TokenExpire time.Duration
 }
 
-func (auth *AuthenticationService) ItemExists(obj *User) (bool, error) {
+func (a *AuthenticationService) UserIsRegistered(obj *User) (bool, error) {
 	if obj.Name == "" && obj.Email == "" {
 		return false, errors.New("username and email were not provided")
 	}
-	query, args := auth.ExistsQuery(obj)
-	return itemExists(auth.DB, query, args)
+	return a.itemExists(obj, func(obj *User) (string, []interface{}) {
+		return "SELECT EXISTS(SELECT 1 FROM users WHERE name = ? OR email = ?)", []interface{}{obj.Name, obj.Email}
+	})
 }
-func (auth *AuthenticationService) ExistsQuery(obj *User) (string, []interface{}) {
-	return "SELECT EXISTS(SELECT 1 FROM users WHERE name = ? OR email = ?)", []interface{}{obj.Name, obj.Email}
+func (a *AuthenticationService) RegisterUser(obj *User) error {
+	if obj.Email == "" || obj.Name == "" || obj.Password == "" {
+		return errors.New("fields were not completed")
+	}
+	b := validEmail(obj.Email)
+	if !b {
+		return errors.New("invalid email")
+	}
+	hashed, err := bcrypt.GenerateFromPassword([]byte(obj.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	obj.Password = string(hashed)
+	return a.insertItem(obj, func(obj *User) (string, []interface{}) {
+		return "INSERT INTO users (name,email,password) VALUES (?,?,?)", []interface{}{obj.Name, obj.Email, obj.Password}
+	})
 }
-
-func AuthService(db *sql.DB, duration time.Duration) (*AuthenticationService, error) {
+func NewAuthenticationService(db *sql.DB, duration time.Duration) (*AuthenticationService, error) {
 	key, err := generateSignedKey()
 	if err != nil {
 		return nil, err
 	}
 	return &AuthenticationService{
-		DB:          db,
+		GenericService: &GenericService[User, uint32]{
+			db: db,
+		},
 		TokenExpire: duration,
 		SigningKey:  key,
 	}, nil
 }
-func (auth *AuthenticationService) ValidateToken(tokenString string) (*jwt.Token, error) {
+func (a *AuthenticationService) ValidateToken(tokenString string) (*jwt.Token, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New("unexpected signing method")
 		}
-		return auth.SigningKey, nil
+		return a.SigningKey, nil
 	})
 
 	if err != nil {
@@ -74,47 +90,28 @@ func generateSignedKey() ([]byte, error) {
 	return key, nil
 }
 
-func (auth *AuthenticationService) RegisterUser(u *User) error {
-	b := validEmail(u.Email)
-	if !b {
-		return fmt.Errorf("invalid email was attempted to be registered: '%s'", u.Email)
-	}
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return err
-	}
-	stmt, err := auth.DB.Prepare("INSERT INTO users(name, email, password) VALUES (?, ?, ?)")
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	_, err = stmt.Exec(u.Name, u.Email, hashedPassword)
-	return err
-}
-
-func (auth *AuthenticationService) AuthenticateUser(u *User) (string, error) {
-	if b, err := compareHashedPassword(auth.DB, u); err != nil {
+func (a *AuthenticationService) AuthenticateUser(u *User) (string, error) {
+	if b, err := compareHashedPassword(a.db, u); err != nil {
 		return "", err
 	} else if !b {
 		return "", errors.New("invalid credentials")
 	}
-	token, err := auth.generateToken(u)
+	token, err := a.generateToken(u)
 	if err != nil {
 		return "", err
 	}
 	return token, nil
 }
 
-func (auth *AuthenticationService) generateToken(u *User) (string, error) {
+func (a *AuthenticationService) generateToken(u *User) (string, error) {
 	claims := jwt.MapClaims{
 		"id":    u.ID,
 		"name":  u.Name,
 		"email": u.Email,
-		"exp":   time.Now().Add(auth.TokenExpire).Unix(),
+		"exp":   time.Now().Add(a.TokenExpire).Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(auth.SigningKey)
+	return token.SignedString(a.SigningKey)
 }
 
 func validEmail(email string) bool {
