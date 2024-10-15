@@ -1,4 +1,4 @@
-package user
+package service
 
 import (
 	"database/sql"
@@ -6,6 +6,8 @@ import (
 )
 
 type service[T any, K comparable] interface {
+	updateItem(query string, args []interface{}) error
+	deleteItems(query string, args []interface{}) error
 	itemExists(obj *T, q func(obj *T) (string, []interface{})) (bool, error)
 	insertItem(obj *T, q func(obj *T) (string, []interface{})) error
 	getItem(query string, args []interface{}, scan func(t *T, rows *sql.Rows) error) (*T, error)
@@ -15,6 +17,34 @@ type genericService[T any, K comparable] struct {
 	db *sql.DB
 }
 
+func (s *genericService[T, K]) updateItem(query string, args []interface{}) error {
+	stmt, err := s.db.Prepare(query)
+	if err != nil {
+		return fmt.Errorf("failed to prepare query: %w", err)
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(args...)
+	if err != nil {
+		return fmt.Errorf("failed to execute update: %w", err)
+	}
+
+	return nil
+}
+func (s *genericService[T, K]) deleteItems(query string, args []interface{}) error {
+	stmt, err := s.db.Prepare(query)
+	if err != nil {
+		return fmt.Errorf("failed to prepare query: %w", err)
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(args...)
+	if err != nil {
+		return fmt.Errorf("failed to execute delete: %w", err)
+	}
+
+	return nil
+}
 func (s *genericService[T, K]) itemExists(obj *T, q func(obj *T) (string, []interface{})) (bool, error) {
 	query, args := q(obj)
 	var exists bool

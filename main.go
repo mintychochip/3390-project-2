@@ -2,8 +2,11 @@ package main
 
 import (
 	"api-3390/config"
+	"api-3390/container/predicate"
+	"api-3390/handler"
+	"api-3390/handler/middleware"
+	"api-3390/service"
 	"api-3390/user"
-	"encoding/json"
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	"io"
@@ -11,8 +14,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
-	"strconv"
-	"time"
 )
 
 const UploadPath = "./uploads/"
@@ -36,108 +37,120 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	authService, err := user.NewAuthenticationService(db, time.Hour)
-	fileService := user.NewFileService(db)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println(authService.SigningKey)
+	//fileService := user.NewFileService(db)
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+	services := handler.NewServices(service.NewUserService(db))
+	api := handler.API{Services: services}
 	r := chi.NewRouter()
 	r.Use(cfg.ApplicationMiddleWare)
-	r.Get("/api/files/{user_id}/{file_name}", func(w http.ResponseWriter, r *http.Request) {
-		userId := chi.URLParam(r, "user_id")
-		fileName := chi.URLParam(r, "file_name")
-		intId, err := strconv.Atoi(userId)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		file, err := fileService.GetUserFile(uint32(intId), fileName)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(file); err != nil {
-			http.Error(w, "Error encoding response", http.StatusInternalServerError)
-		}
-	})
-	r.Get("/api/files/{user_id}", func(w http.ResponseWriter, r *http.Request) {
-		userId := chi.URLParam(r, "user_id")
-		intId, err := strconv.Atoi(userId)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if files, err := fileService.GetAllUserFiles(uint32(intId)); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		} else {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			if err := json.NewEncoder(w).Encode(files); err != nil {
-				http.Error(w, "Error encoding response", http.StatusInternalServerError)
-			}
-		}
-	})
-	r.Post("/api/auth/login", func(w http.ResponseWriter, r *http.Request) {
-		var u user.User
-		if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		b, err := authService.UserIsRegistered(&u)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if !b {
-			http.Error(w, "cannot authenticate, user does not exist", http.StatusConflict)
-			return
-		}
+	r.Route("/users", func(r chi.Router) {
+		r.Get("/", api.HandleGetAllUsers)
 
-		if b, err = authService.AuthenticateUser(&u); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		} else if !b {
-			http.Error(w, "invalid credentials", http.StatusConflict)
-			return
-		}
-
-		if token, err := authService.GenerateToken(&u); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		} else {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			if err := json.NewEncoder(w).Encode(map[string]string{"token": token}); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-			}
-			return
-		}
+		r.Route("/{user_id}", func(r chi.Router) {
+			r.Use(middleware.URLParam("user_id", predicate.AllowedCharacters, predicate.NonNegativePredicate))
+			r.Get("/", api.HandleGetUserById)
+			r.Delete("/", api.HandleDeleteUserById)
+			r.With(middleware.InterceptJson(map[string]predicate.Predicate[string]{
+				"email": predicate.EmailIsValid,
+			})).Put("/", api.HandleUpdateUserById)
+		})
 	})
-	r.Post("/api/auth/register", func(w http.ResponseWriter, r *http.Request) {
-		var u user.User
-		if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
-			http.Error(w, fmt.Errorf("failed to register user: %w", err).Error(), http.StatusBadRequest)
-			return
-		}
-		b, err := authService.UserIsRegistered(&u)
-		if err != nil {
-			http.Error(w, fmt.Errorf("failed to register user: %w", err).Error(), http.StatusBadRequest)
-			return
-		}
-		if b {
-			http.Error(w, "failed to register user: user already exists", http.StatusConflict)
-			return
-		}
-		if err := authService.RegisterUser(&u); err != nil {
-			http.Error(w, fmt.Errorf("failed to register user: %w", err).Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusCreated)
-	})
+	//r.Get("/api/files/{user_id}/{file_name}", func(w http.ResponseWriter, r *http.Request) {
+	//	userId := chi.URLParam(r, "user_id")
+	//	fileName := chi.URLParam(r, "file_name")
+	//	intId, err := strconv.Atoi(userId)
+	//	if err != nil {
+	//		http.Error(w, err.Error(), http.StatusBadRequest)
+	//		return
+	//	}
+	//	file, err := fileService.GetUserFile(uint32(intId), fileName)
+	//	if err != nil {
+	//		http.Error(w, err.Error(), http.StatusBadRequest)
+	//		return
+	//	}
+	//	w.Header().Set("Content-Type", "application/json")
+	//	w.WriteHeader(http.StatusOK)
+	//	if err := json.NewEncoder(w).Encode(file); err != nil {
+	//		http.Error(w, "Error encoding response", http.StatusInternalServerError)
+	//	}
+	//})
+	//r.Get("/api/files/{user_id}", func(w http.ResponseWriter, r *http.Request) {
+	//	userId := chi.URLParam(r, "user_id")
+	//	intId, err := strconv.Atoi(userId)
+	//	if err != nil {
+	//		http.Error(w, err.Error(), http.StatusInternalServerError)
+	//		return
+	//	}
+	//	if files, err := fileService.GetAllUserFiles(uint32(intId)); err != nil {
+	//		http.Error(w, err.Error(), http.StatusInternalServerError)
+	//		return
+	//	} else {
+	//		w.Header().Set("Content-Type", "application/json")
+	//		w.WriteHeader(http.StatusOK)
+	//		if err := json.NewEncoder(w).Encode(files); err != nil {
+	//			http.Error(w, "Error encoding response", http.StatusInternalServerError)
+	//		}
+	//	}
+	//})
+	//r.Post("/api/auth/login", func(w http.ResponseWriter, r *http.Request) {
+	//	var u user.User
+	//	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
+	//		http.Error(w, err.Error(), http.StatusBadRequest)
+	//		return
+	//	}
+	//	b, err := authService.UserIsRegistered(&u)
+	//	if err != nil {
+	//		http.Error(w, err.Error(), http.StatusBadRequest)
+	//		return
+	//	}
+	//	if !b {
+	//		http.Error(w, "cannot authenticate, user does not exist", http.StatusConflict)
+	//		return
+	//	}
+	//
+	//	if b, err = authService.AuthenticateUser(&u); err != nil {
+	//		http.Error(w, err.Error(), http.StatusInternalServerError)
+	//		return
+	//	} else if !b {
+	//		http.Error(w, "invalid credentials", http.StatusConflict)
+	//		return
+	//	}
+	//
+	//	if token, err := authService.GenerateToken(&u); err != nil {
+	//		http.Error(w, err.Error(), http.StatusInternalServerError)
+	//		return
+	//	} else {
+	//		w.Header().Set("Content-Type", "application/json")
+	//		w.WriteHeader(http.StatusOK)
+	//		if err := json.NewEncoder(w).Encode(map[string]string{"token": token}); err != nil {
+	//			http.Error(w, err.Error(), http.StatusInternalServerError)
+	//		}
+	//		return
+	//	}
+	//})
+	//r.Post("/api/auth/register", func(w http.ResponseWriter, r *http.Request) {
+	//	var u user.User
+	//	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
+	//		http.Error(w, fmt.Errorf("failed to register user: %w", err).Error(), http.StatusBadRequest)
+	//		return
+	//	}
+	//	b, err := authService.UserIsRegistered(&u)
+	//	if err != nil {
+	//		http.Error(w, fmt.Errorf("failed to register user: %w", err).Error(), http.StatusBadRequest)
+	//		return
+	//	}
+	//	if b {
+	//		http.Error(w, "failed to register user: user already exists", http.StatusConflict)
+	//		return
+	//	}
+	//	if err := authService.RegisterUser(&u); err != nil {
+	//		http.Error(w, fmt.Errorf("failed to register user: %w", err).Error(), http.StatusInternalServerError)
+	//		return
+	//	}
+	//	w.WriteHeader(http.StatusCreated)
+	//})
 	log.Println(fmt.Sprintf("Starting server on: '%s'", cfg.Address()))
 	if err := http.ListenAndServe(cfg.Address(), r); err != nil {
 		log.Fatal(err)
