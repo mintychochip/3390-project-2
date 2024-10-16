@@ -13,7 +13,7 @@ import (
 )
 
 func URLParam(key string, predicates ...predicate.Predicate[string]) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
+	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			val := chi.URLParam(r, key)
 
@@ -24,7 +24,7 @@ func URLParam(key string, predicates ...predicate.Predicate[string]) func(http.H
 				}
 			}
 			ctx := context.WithValue(r.Context(), key, val)
-			next.ServeHTTP(w, r.WithContext(ctx))
+			h.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }

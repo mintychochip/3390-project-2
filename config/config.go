@@ -4,9 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	_ "modernc.org/sqlite"
-	"net/http"
 	"os"
 	"strconv"
 )
@@ -22,21 +20,11 @@ type Config struct {
 	ReferenceKey string `json:"reference_key"`
 }
 
-func (cfg *Config) ApplicationMiddleWare(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		apiKey := r.Header.Get("X-API-KEY")
-		if apiKey != cfg.ReferenceKey {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			clientIP := r.RemoteAddr
-			if apiKey == "" {
-				log.Printf("Unauthorized access attempt from IP: %s with empty key", clientIP)
-				return
-			}
-			log.Printf("Unauthorized access attempt from IP: %s with key: %s\n", clientIP, apiKey)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
+func NewConfig() (*Config, error) {
+	if len(os.Args) > 1 {
+		return load(os.Args[1])
+	}
+	return loadFromEnv()
 }
 func (cfg *Config) Connection() (*sql.DB, error) {
 	driverName := "sqlite"
@@ -54,7 +42,7 @@ func (cfg *Config) Connection() (*sql.DB, error) {
 func (cfg *Config) Address() string {
 	return fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 }
-func Load(path string) (*Config, error) {
+func load(path string) (*Config, error) {
 	cfg, err := loadFromFile(path)
 	if err != nil {
 		return nil, err
@@ -74,7 +62,7 @@ func loadFromFile(path string) (*Config, error) {
 	return &cfg, nil
 }
 
-func LoadFromEnv() (*Config, error) {
+func loadFromEnv() (*Config, error) {
 	cfg := Config{
 		User:     os.Getenv("USER"),
 		Password: os.Getenv("PASSWORD"),

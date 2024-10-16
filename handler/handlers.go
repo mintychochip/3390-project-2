@@ -2,7 +2,6 @@ package handler
 
 import (
 	"api-3390/container"
-	"api-3390/service"
 	"encoding/json"
 	"errors"
 	_ "github.com/go-chi/chi/v5"
@@ -10,19 +9,6 @@ import (
 	"net/http"
 	"strconv"
 )
-
-type API struct {
-	Services *Services
-}
-type Services struct {
-	UserService *service.UserService
-}
-
-func NewServices(userService *service.UserService) *Services {
-	return &Services{
-		UserService: userService,
-	}
-}
 
 func (a *API) HandleGetAllUsers(w http.ResponseWriter, r *http.Request) {
 	us, err := a.Services.UserService.GetAllUsers()
@@ -64,7 +50,7 @@ func (a *API) HandleUpdateUserById(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "ErrorMessage hashing password", http.StatusInternalServerError)
 			return
 		}
-		updatedUser.Password = string(hashedPassword) // Update the password field with the hashed password
+		updatedUser.Password = string(hashedPassword)
 	}
 
 	err = a.Services.UserService.UpdateUserById(&updatedUser)
@@ -122,4 +108,17 @@ func getUserId(r *http.Request) (uint32, error) {
 		return 0, err
 	}
 	return uint32(id), nil
+}
+
+func (a *API) HandleGetAllFiles(w http.ResponseWriter, r *http.Request) {
+	us, err := a.Services.FileService.GetAllFiles()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(us); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }

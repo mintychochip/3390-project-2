@@ -2,7 +2,6 @@ package service
 
 import (
 	"api-3390/container"
-	"api-3390/container/predicate"
 	"database/sql"
 	"errors"
 	"golang.org/x/crypto/bcrypt"
@@ -40,10 +39,6 @@ func (us *UserService) GetAllUsers() ([]*container.User, error) {
 func (us *UserService) CreateUser(u *container.User) error {
 	if u.Email == "" || u.Name == "" || u.Password == "" {
 		return errors.New("fields were not completed")
-	}
-	b := predicate.EmailIsValid.Test(u.Email)
-	if !b {
-		return errors.New("invalid email")
 	}
 	hashed, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
 	if err != nil {
