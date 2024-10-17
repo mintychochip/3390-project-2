@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	_ "github.com/go-chi/chi/v5"
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"strconv"
