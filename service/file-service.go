@@ -16,37 +16,34 @@ func NewFileService(db *sql.DB) *FileService {
 		},
 	}
 }
-
-func (fs *FileService) UpdateUserById(f *container.File) error {
-	return fs.updateItem("UPDATE user_files SET user_id = ?, name = ?, upload_time = ? WHERE id = ?",
-		[]interface{}{f.UserID, f.Name, f.UploadTime, f.ID})
+func (fs *FileService) GetUserFiles(userId uint32) ([]*container.File, error) {
+	return fs.getAllItems("SELECT id,name,upload_time FROM user_files WHERE user_id = ?", []interface{}{userId}, func(t *container.File, rows *sql.Rows) error {
+		t.UserID = userId
+		return rows.Scan(&t.ID, &t.Name, &t.UploadTime)
+	})
+}
+func (fs *FileService) UpdateFile(f *container.File) error {
+	return fs.updateItem("UPDATE user_files SET user_id = ?, name = ? WHERE id = ?",
+		[]interface{}{f.UserID, f.Name, f.ID})
 }
 
-//	func (fs *FileService) DeleteUserById(k uint32) error {
-//		return us.deleteItems("DELETE FROM users WHERE id = ?", []interface{}{k})
-//	}
-//
-//	func (fs *FileService) GetUserById(k uint32) (*container.User, error) {
-//		return us.getItem("SELECT name,email,password FROM users WHERE id = ?", []interface{}{k},
-//			func(t *container.User, rows *sql.Rows) error {
-//				return rows.Scan(&t.Name, &t.Email, &t.Password)
-//			})
-//	}
+func (fs *FileService) DeleteFileById(k uint32) error {
+	return fs.deleteItems("DELETE FROM user_files WHERE id = ?", []interface{}{k})
+}
+func (fs *FileService) GetFileById(k uint32) (*container.File, error) {
+	return fs.getItem("SELECT user_id,name,upload_time FROM user_files WHERE id = ?", []interface{}{k},
+		func(f *container.File, rows *sql.Rows) error {
+			f.ID = k
+			return rows.Scan(&f.UserID, &f.Name, &f.UploadTime)
+		})
+}
 func (fs *FileService) GetAllFiles() ([]*container.File, error) {
 	return fs.getAllItems("SELECT * FROM user_files", []interface{}{}, func(t *container.File, rows *sql.Rows) error {
 		return rows.Scan(&t.ID, &t.UserID, &t.Name, &t.UploadTime)
 	})
 }
 
-//func (fs *FileService) CreateUser(u *container.User) error {
-//	if u.Email == "" || u.Name == "" || u.Password == "" {
-//		return errors.New("fields were not completed")
-//	}
-//	hashed, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
-//	if err != nil {
-//		return err
-//	}
-//	return us.insertItem(u, func(u *container.User) (string, []interface{}) {
-//		return "INSERT INTO users (name,email,password) VALUES (?,?,?)", []interface{}{u.Name, u.Email, string(hashed)}
-//	})
-//}
+func (fs *FileService) CreateFile(f *container.File) error {
+	return fs.insertItem("INSERT INTO user_files (user_id, name) VALUES (?,?)",
+		[]interface{}{f.UserID, f.Name})
+}

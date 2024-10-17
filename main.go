@@ -26,7 +26,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
+	_, err = db.Exec("PRAGMA foreign_keys = ON")
+	if err != nil {
+		log.Fatalf("Error enabling foreign keys: %v", err)
+	}
 	_, err = db.Exec(user.UserTable)
 	if err != nil {
 		log.Fatal(err)
@@ -45,19 +48,29 @@ func main() {
 			"email": {predicate.IsNotEmpty, predicate.EmailIsValid},
 		})).Post("/", api.HandleCreateUser)
 		r.Route("/{user_id}", func(r chi.Router) {
-			r.Use(middleware.URLParam("user_id", predicate.AllowedCharacters, predicate.NonNegativePredicate))
+			r.Use(middleware.URLParam("user_id", predicate.AllowedCharacters, predicate.NonNegative))
 			r.Get("/", api.HandleGetUserById)
 			r.Delete("/", api.HandleDeleteUserById)
 			r.With(middleware.InterceptJson(map[string][]predicate.Predicate[string]{
 				"email": {predicate.EmailIsValid},
 			})).Put("/", api.HandleUpdateUserById)
+			r.Route("/files", func(r chi.Router) {
+				r.Get("/", api.HandleGetUserFiles)
+			})
 		})
 	})
 	r.Route("/files", func(r chi.Router) {
 		r.Get("/", api.HandleGetAllFiles)
+		r.Post("/", api.HandleCreateFile)
+		r.Route("/{file_id}", func(r chi.Router) {
+			r.Use(middleware.URLParam("file_id", predicate.AllowedCharacters, predicate.NonNegative))
+			r.Get("/", api.HandleGetFileById)
+			r.Delete("/", api.HandleDeleteFileById)
+			r.Put("/", api.HandleUpdateFileById)
+		})
 	})
-	log.Println(fmt.Sprintf("Starting server on: '%s'", cfg.Address()))
-	if err := http.ListenAndServe(cfg.Address(), r); err != nil {
+	log.Println(fmt.Sprintf("Starting server on: '%s'", cfg.Address))
+	if err := http.ListenAndServe(cfg.Address, r); err != nil {
 		log.Fatal(err)
 	}
 }

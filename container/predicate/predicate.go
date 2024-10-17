@@ -19,7 +19,7 @@ var AllowedCharacters = Predicate[string]{
 	},
 	ErrorMessage: errorMessage("\"the parameter can only contain: 0-9, A-Z, a-z, -, ., _, ~"),
 }
-var NonNegativePredicate = Predicate[string]{
+var NonNegative = Predicate[string]{
 	Test: func(t string) bool {
 		toInt, err := strconv.Atoi(t)
 		return err == nil && toInt >= 0

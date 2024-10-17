@@ -18,7 +18,7 @@ func NewUserService(db *sql.DB) *UserService {
 		},
 	}
 }
-func (us *UserService) UpdateUserById(u *container.User) error {
+func (us *UserService) UpdateUser(u *container.User) error {
 	return us.updateItem("UPDATE users SET name = ?, email = ?, password = ? WHERE id = ?",
 		[]interface{}{u.Name, u.Email, u.Password, u.ID})
 }
@@ -44,7 +44,6 @@ func (us *UserService) CreateUser(u *container.User) error {
 	if err != nil {
 		return err
 	}
-	return us.insertItem(u, func(u *container.User) (string, []interface{}) {
-		return "INSERT INTO users (name,email,password) VALUES (?,?,?)", []interface{}{u.Name, u.Email, string(hashed)}
-	})
+	return us.insertItem("INSERT INTO users (name,email,password) VALUES (?,?,?)",
+		[]interface{}{u.Name, u.Email, string(hashed)})
 }

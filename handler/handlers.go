@@ -4,6 +4,7 @@ import (
 	"api-3390/container"
 	"encoding/json"
 	"errors"
+	"fmt"
 	_ "github.com/go-chi/chi/v5"
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
@@ -23,7 +24,7 @@ func (a *API) HandleGetAllUsers(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (a *API) HandleUpdateUserById(w http.ResponseWriter, r *http.Request) {
-	id, err := getUserId(r)
+	id, err := getStringId("user_id", r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -53,14 +54,14 @@ func (a *API) HandleUpdateUserById(w http.ResponseWriter, r *http.Request) {
 		updatedUser.Password = string(hashedPassword)
 	}
 
-	err = a.Services.UserService.UpdateUserById(&updatedUser)
+	err = a.Services.UserService.UpdateUser(&updatedUser)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
 func (a *API) HandleDeleteUserById(w http.ResponseWriter, r *http.Request) {
-	id, err := getUserId(r)
+	id, err := getStringId("user_id", r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -70,7 +71,7 @@ func (a *API) HandleDeleteUserById(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (a *API) HandleGetUserById(w http.ResponseWriter, r *http.Request) {
-	id, err := getUserId(r)
+	id, err := getStringId("user_id", r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -98,8 +99,8 @@ func (a *API) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
-func getUserId(r *http.Request) (uint32, error) {
-	val, ok := r.Context().Value("user_id").(string)
+func getStringId(key string, r *http.Request) (uint32, error) {
+	val, ok := r.Context().Value(key).(string)
 	if !ok {
 		return 0, errors.New("un defined value")
 	}
@@ -119,6 +120,93 @@ func (a *API) HandleGetAllFiles(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(us); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (a *API) HandleCreateFile(w http.ResponseWriter, r *http.Request) {
+	var file container.File
+	err := json.NewDecoder(r.Body).Decode(&file)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	err = a.Services.FileService.CreateFile(&file)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (a *API) HandleGetFileById(w http.ResponseWriter, r *http.Request) {
+	id, err := getStringId("file_id", r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	f, err := a.Services.FileService.GetFileById(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(f); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (a *API) HandleDeleteFileById(w http.ResponseWriter, r *http.Request) {
+	id, err := getStringId("file_id", r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := a.Services.FileService.DeleteFileById(id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (a *API) HandleUpdateFileById(w http.ResponseWriter, r *http.Request) {
+	id, err := getStringId("file_id", r)
+	fmt.Println(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	u, err := a.Services.FileService.GetFileById(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if u == nil {
+		http.Error(w, "File not found", http.StatusNotFound)
+		return
+	}
+	var updatedFile container.File
+	err = json.NewDecoder(r.Body).Decode(&updatedFile)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+	updatedFile.ID = id
+	if err := a.Services.FileService.UpdateFile(&updatedFile); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (a *API) HandleGetUserFiles(w http.ResponseWriter, r *http.Request) {
+	id, err := getStringId("user_id", r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	files, err := a.Services.FileService.GetUserFiles(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(files); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
