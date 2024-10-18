@@ -9,7 +9,7 @@ type service[T any, K comparable] interface {
 	updateItem(query string, args []interface{}) error
 	deleteItems(query string, args []interface{}) error
 	itemExists(obj *T, q func(obj *T) (string, []interface{})) (bool, error)
-	insertItem(obj *T, q func(obj *T) (string, []interface{})) error
+	insertItem(query string, args []interface{}) error
 	getItem(query string, args []interface{}, scan func(t *T, rows *sql.Rows) error) (*T, error)
 	getAllItems(query string, args []interface{}, scan func(t *T, rows *sql.Rows) error) ([]*T, error)
 }
@@ -55,8 +55,7 @@ func (s *genericService[T, K]) itemExists(obj *T, q func(obj *T) (string, []inte
 	fmt.Println(exists)
 	return exists, nil
 }
-func (s *genericService[T, K]) insertItem(obj *T, q func(obj *T) (string, []interface{})) error {
-	query, args := q(obj)
+func (s *genericService[T, K]) insertItem(query string, args []interface{}) error {
 	stmt, err := s.db.Prepare(query)
 	if err != nil {
 		return err

@@ -7,12 +7,7 @@ package user
 //	"time"
 //)
 //
-//type File struct {
-//	ID         uint32    `json:"id"`
-//	UserID     uint32    `json:"user_id"`
-//	Name       string    `json:"name"`
-//	UploadTime time.Time `json:"upload_time"`
-//}
+
 //
 //type FileService struct {
 //	*service.genericService[File, uint32]

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/go-chi/chi/v5"
 	"io"
 	"net/http"
@@ -12,23 +13,23 @@ import (
 )
 
 func URLParam(key string, predicates ...predicate.Predicate[string]) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
+	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			val := chi.URLParam(r, key)
 
 			for _, p := range predicates {
 				if !p.Test(val) {
-					http.Error(w, p.Error, http.StatusNotFound)
+					http.Error(w, p.ErrorMessage(val), http.StatusNotFound)
 					return
 				}
 			}
 			ctx := context.WithValue(r.Context(), key, val)
-			next.ServeHTTP(w, r.WithContext(ctx))
+			h.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-func InterceptJson(m map[string]predicate.Predicate[string]) func(handler http.Handler) http.Handler {
+func InterceptJson(m map[string][]predicate.Predicate[string]) func(http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Header.Get("Content-Type") != "application/json" {
@@ -44,11 +45,19 @@ func InterceptJson(m map[string]predicate.Predicate[string]) func(handler http.H
 				return
 			}
 
-			for key, p := range m {
-				if value, exists := payload[key]; exists {
-					if !p.Test(value.(string)) {
-						http.Error(w, p.Error, http.StatusBadRequest)
+			for key, predicates := range m {
+				if val, exists := payload[key]; exists {
+					str, ok := val.(string)
+					if !ok {
+						http.Error(w, fmt.Sprintf("Invalid type for key '%s'", key), http.StatusBadRequest)
 						return
+					}
+
+					for _, p := range predicates {
+						if !p.Test(str) {
+							http.Error(w, p.ErrorMessage(str), http.StatusBadRequest)
+							return
+						}
 					}
 				}
 			}
