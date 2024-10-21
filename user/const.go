@@ -1,5 +1,7 @@
 package user
 
+var ValidExtensions = []string{".csv"}
+
 const UserTable = `CREATE TABLE IF NOT EXISTS users(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name VARCHAR(32) NOT NULL UNIQUE,

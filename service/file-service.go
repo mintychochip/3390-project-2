@@ -16,13 +16,16 @@ func NewFileService(db *sql.DB) *FileService {
 		},
 	}
 }
+func (fs *FileService) UserHasFileEntry(f *container.File) (bool, error) {
+	return fs.itemExists("SELECT EXISTS (SELECT 1 FROM user_files WHERE user_id = ? AND name = ?)", []interface{}{f.UserID, f.Name})
+}
 func (fs *FileService) GetUserFiles(userId uint32) ([]*container.File, error) {
 	return fs.getAllItems("SELECT id,name,upload_time FROM user_files WHERE user_id = ?", []interface{}{userId}, func(t *container.File, rows *sql.Rows) error {
 		t.UserID = userId
 		return rows.Scan(&t.ID, &t.Name, &t.UploadTime)
 	})
 }
-func (fs *FileService) UpdateFile(f *container.File) error {
+func (fs *FileService) UpdateFileEntry(f *container.File) error {
 	return fs.updateItem("UPDATE user_files SET user_id = ?, name = ? WHERE id = ?",
 		[]interface{}{f.UserID, f.Name, f.ID})
 }
@@ -43,7 +46,7 @@ func (fs *FileService) GetAllFiles() ([]*container.File, error) {
 	})
 }
 
-func (fs *FileService) CreateFile(f *container.File) error {
+func (fs *FileService) CreateFileEntry(f *container.File) error {
 	return fs.insertItem("INSERT INTO user_files (user_id, name) VALUES (?,?)",
 		[]interface{}{f.UserID, f.Name})
 }

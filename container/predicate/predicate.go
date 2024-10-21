@@ -10,21 +10,21 @@ var IsNotEmpty = Predicate[string]{
 	Test: func(t string) bool {
 		return t != ""
 	},
-	ErrorMessage: errorMessage("string cannot be empty"),
+	ErrorMessage: ErrorMessage("string cannot be empty"),
 }
 var AllowedCharacters = Predicate[string]{
 	Test: func(t string) bool {
 		valid := regexp.MustCompile(`^[0-9A-Za-z\-._~]+$`)
 		return valid.MatchString(t)
 	},
-	ErrorMessage: errorMessage("\"the parameter can only contain: 0-9, A-Z, a-z, -, ., _, ~"),
+	ErrorMessage: ErrorMessage("\"the parameter can only contain: 0-9, A-Z, a-z, -, ., _, ~"),
 }
 var NonNegative = Predicate[string]{
 	Test: func(t string) bool {
 		toInt, err := strconv.Atoi(t)
 		return err == nil && toInt >= 0
 	},
-	ErrorMessage: errorMessage("the parameter must be a positive number or zero"),
+	ErrorMessage: ErrorMessage("the parameter must be a positive number or zero"),
 }
 var EmailIsValid = Predicate[string]{
 	Test: func(t string) bool {
@@ -33,7 +33,7 @@ var EmailIsValid = Predicate[string]{
 
 		return re.MatchString(t)
 	},
-	ErrorMessage: errorMessage("email is invalid"),
+	ErrorMessage: ErrorMessage("email is invalid"),
 }
 
 type Predicate[T any] struct {
@@ -41,7 +41,7 @@ type Predicate[T any] struct {
 	ErrorMessage func(t T) string
 }
 
-func errorMessage(template string) func(s string) string {
+func ErrorMessage(template string) func(s string) string {
 	return func(s string) string {
 		return fmt.Sprintf(template+": %s", s)
 	}

@@ -18,6 +18,9 @@ func NewUserService(db *sql.DB) *UserService {
 		},
 	}
 }
+func (us *UserService) UserExists(u *container.User) (bool, error) {
+	return us.itemExists("SELECT EXISTS(SELECT 1 FROM users WHERE id = ?)", []interface{}{u.ID})
+}
 func (us *UserService) UpdateUser(u *container.User) error {
 	return us.updateItem("UPDATE users SET name = ?, email = ?, password = ? WHERE id = ?",
 		[]interface{}{u.Name, u.Email, u.Password, u.ID})
