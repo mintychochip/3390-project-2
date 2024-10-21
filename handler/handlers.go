@@ -214,14 +214,16 @@ func (a *API) HandleGetFileById(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	filePath := filepath.Join("./uploads", strconv.Itoa(int(file.UserID)), file.Name)
+	columnsParam := r.URL.Query().Get("columns")
+	columns := strings.Split(columnsParam, ",")
 	p := QueryParams{
 		Operation: r.URL.Query().Get("operation"),
-		Column:    r.URL.Query().Get("column"),
+		Column:    columns,
 	}
 	qb := NewQueryBuilder().
 		AddQuery("average", a.calculateAverage).
 		AddQuery("sum", a.calculateSum).
-		SetDefaultCase(func(w http.ResponseWriter, _ string, filePath string) {
+		SetDefaultCase(func(w http.ResponseWriter, _ []string, filePath string) {
 			w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filePath))
 			w.Header().Set("Content-Type", "application/octet-stream")
 			if _, err := os.Stat(filePath); os.IsNotExist(err) {
@@ -240,7 +242,7 @@ func (a *API) HandleGetFileById(w http.ResponseWriter, r *http.Request) {
 		})
 	qb.Build(w, p, filePath)
 }
-func (a *API) calculateSum(w http.ResponseWriter, columnName string, filePath string) {
+func (a *API) calculateSum(w http.ResponseWriter, columnName []string, filePath string) {
 	// Open the CSV file
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -261,7 +263,7 @@ func (a *API) calculateSum(w http.ResponseWriter, columnName string, filePath st
 	// Find the index of the specified column
 	columnIndex := -1
 	for i, header := range headers {
-		if strings.EqualFold(header, columnName) {
+		if strings.EqualFold(header, columnName[0]) {
 			columnIndex = i
 			break
 		}
@@ -306,7 +308,7 @@ func (a *API) calculateSum(w http.ResponseWriter, columnName string, filePath st
 	}
 }
 
-func (a *API) calculateAverage(w http.ResponseWriter, columnName string, filePath string) {
+func (a *API) calculateAverage(w http.ResponseWriter, columnName []string, filePath string) {
 
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -325,7 +327,7 @@ func (a *API) calculateAverage(w http.ResponseWriter, columnName string, filePat
 
 	columnIndex := -1
 	for i, header := range headers {
-		if strings.EqualFold(header, columnName) {
+		if strings.EqualFold(header, columnName[0]) {
 			columnIndex = i
 			break
 		}
