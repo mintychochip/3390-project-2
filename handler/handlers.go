@@ -202,12 +202,6 @@ func (a *API) HandleCreateFile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
-func parseQueryParams(r *http.Request) *FileQueryParams {
-	return &FileQueryParams{
-		Column:    r.URL.Query().Get("column"),
-		Operation: r.URL.Query().Get("operation"),
-	}
-}
 func (a *API) HandleGetFileById(w http.ResponseWriter, r *http.Request) {
 	id, err := getStringId("file_id", r)
 	if err != nil {
@@ -220,21 +214,98 @@ func (a *API) HandleGetFileById(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	filePath := filepath.Join("./uploads", strconv.Itoa(int(file.UserID)), file.Name)
+	p := QueryParams{
+		Operation: r.URL.Query().Get("operation"),
+		Column:    r.URL.Query().Get("column"),
+	}
+	qb := NewQueryBuilder().
+		AddQuery("average", a.calculateAverage).
+		AddQuery("sum", a.calculateSum).
+		SetDefaultCase(func(w http.ResponseWriter, _ string, filePath string) {
+			w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filePath))
+			w.Header().Set("Content-Type", "application/octet-stream")
+			if _, err := os.Stat(filePath); os.IsNotExist(err) {
+				http.Error(w, "file not found", http.StatusNotFound)
+				return
+			}
+			f, err := os.Open(filePath)
+			if err != nil {
+				http.Error(w, "unable to open file", http.StatusInternalServerError)
+				return
+			}
+			defer f.Close()
+			if _, err := io.Copy(w, f); err != nil {
+				http.Error(w, "unable to send file", http.StatusInternalServerError)
+			}
+		})
+	qb.Build(w, p, filePath)
+}
+func (a *API) calculateSum(w http.ResponseWriter, columnName string, filePath string) {
+	// Open the CSV file
+	file, err := os.Open(filePath)
+	if err != nil {
+		http.Error(w, "file not found", http.StatusNotFound)
+		return
+	}
+	defer file.Close()
 
-	p := parseQueryParams(r)
+	reader := csv.NewReader(file)
 
-	if p.IsEmpty() {
-		a.handleGetFileById(w, r, file, filePath)
-	} else {
-		switch p.Operation {
-		case "average":
-			a.calculateAverage(w, p.Column, filePath)
-		default:
-			http.Error(w, "invalid operation", http.StatusBadRequest)
-			return
+	// Read the header
+	headers, err := reader.Read()
+	if err != nil {
+		http.Error(w, "error reading file", http.StatusInternalServerError)
+		return
+	}
+
+	// Find the index of the specified column
+	columnIndex := -1
+	for i, header := range headers {
+		if strings.EqualFold(header, columnName) {
+			columnIndex = i
+			break
 		}
 	}
+
+	if columnIndex == -1 {
+		http.Error(w, "column not found", http.StatusBadRequest)
+		return
+	}
+
+	// Variables for total sum and count
+	var total float64
+	var count int
+
+	// Read the records and calculate the total
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break // End of file reached
+		}
+		if err != nil {
+			http.Error(w, "error reading file", http.StatusInternalServerError)
+			return
+		}
+
+		// Parse the value in the specified column
+		value, err := strconv.ParseFloat(record[columnIndex], 64)
+		if err != nil {
+			http.Error(w, "invalid data format", http.StatusBadRequest)
+			return
+		}
+
+		total += value
+		count++
+	}
+
+	// Return the sum as JSON
+	response := map[string]float64{"sum": total}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
+
 func (a *API) calculateAverage(w http.ResponseWriter, columnName string, filePath string) {
 
 	file, err := os.Open(filePath)
@@ -300,23 +371,6 @@ func (a *API) calculateAverage(w http.ResponseWriter, columnName string, filePat
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, `{"average": %f}`, average)
-}
-func (a *API) handleGetFileById(w http.ResponseWriter, r *http.Request, file *container.File, filePath string) {
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", file.Name))
-	w.Header().Set("Content-Type", "application/octet-stream")
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		http.Error(w, "file not found", http.StatusNotFound)
-		return
-	}
-	f, err := os.Open(filePath)
-	if err != nil {
-		http.Error(w, "unable to open file", http.StatusInternalServerError)
-		return
-	}
-	defer f.Close()
-	if _, err := io.Copy(w, f); err != nil {
-		http.Error(w, "unable to send file", http.StatusInternalServerError)
-	}
 }
 func (a *API) HandleDeleteFileById(w http.ResponseWriter, r *http.Request) {
 	id, err := getStringId("file_id", r)
