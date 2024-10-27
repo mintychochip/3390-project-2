@@ -6,13 +6,15 @@ type API struct {
 	Services *Services
 }
 type Services struct {
-	UserService *service.UserService
+	AuthService *service.AuthService
 	FileService *service.FileService
+	UserService *service.UserService
 }
 
-func NewServices(us *service.UserService, fs *service.FileService) *Services {
+func NewServices(as *service.AuthService, fs *service.FileService, us *service.UserService) *Services {
 	return &Services{
-		UserService: us,
+		AuthService: as,
 		FileService: fs,
+		UserService: us,
 	}
 }

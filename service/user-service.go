@@ -4,6 +4,7 @@ import (
 	"api-3390/container"
 	"database/sql"
 	"errors"
+
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -24,6 +25,12 @@ func (us *UserService) UpdateUser(u *container.User) error {
 }
 func (us *UserService) DeleteUserById(k uint32) error {
 	return us.deleteItems("DELETE FROM users WHERE id = ?", []interface{}{k})
+}
+func (us *UserService) getUserByEmail(email string) (*container.User, error) {
+	return us.getItem("SELECT id, name, email, password FROM users WHERE email = ?", []interface{}{email},
+		func(t *container.User, rows *sql.Rows) error {
+			return rows.Scan(&t.ID, &t.Name, &t.Email, &t.Password)
+		})
 }
 func (us *UserService) GetUserById(k uint32) (*container.User, error) {
 	return us.getItem("SELECT name,email,password FROM users WHERE id = ?", []interface{}{k},
