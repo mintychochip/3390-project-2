@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"strconv"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
+// User Handlers
 func (a *API) HandleGetAllUsers(w http.ResponseWriter, r *http.Request) {
 	us, err := a.Services.UserService.GetAllUsers()
 	if err != nil {
@@ -98,18 +100,30 @@ func (a *API) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
-func getStringId(key string, r *http.Request) (uint32, error) {
-	val, ok := r.Context().Value(key).(string)
-	if !ok {
-		return 0, errors.New("un defined value")
-	}
-	id, err := strconv.Atoi(val)
-	if err != nil {
-		return 0, err
-	}
-	return uint32(id), nil
+
+// Auth Handlers
+type LoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
+func (a *API) HandleLogin(w http.ResponseWriter, r *http.Request) {
+	var req LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		return
+	}
+	u, err := a.Services.AuthService.Login(req.Email, req.Password)
+	if err != nil {
+		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(u)
+}
+
+// File Handlers
 func (a *API) HandleGetAllFiles(w http.ResponseWriter, r *http.Request) {
 	us, err := a.Services.FileService.GetAllFiles()
 	if err != nil {
@@ -208,4 +222,17 @@ func (a *API) HandleGetUserFiles(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(files); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+// Helper Functions
+func getStringId(key string, r *http.Request) (uint32, error) {
+	val, ok := r.Context().Value(key).(string)
+	if !ok {
+		return 0, errors.New("un defined value")
+	}
+	id, err := strconv.Atoi(val)
+	if err != nil {
+		return 0, err
+	}
+	return uint32(id), nil
 }

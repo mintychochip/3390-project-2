@@ -8,10 +8,12 @@ import (
 	"api-3390/service"
 	"api-3390/user"
 	"fmt"
-	"github.com/go-chi/chi/v5"
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/cors"
 )
 
 const UploadPath = "./uploads/"
@@ -38,10 +40,27 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	services := handler.NewServices(service.NewUserService(db), service.NewFileService(db))
+	services := handler.NewServices(service.NewAuthService(db), service.NewFileService(db), service.NewUserService(db))
 	api := handler.API{Services: services}
 	r := chi.NewRouter()
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"http://localhost:5173"}, // Frontend origin
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Content-Type", "Authorization", "X-API-KEY"},
+		AllowCredentials: false,
+		MaxAge:           300, // Max cache age in seconds ??
+	}))
 	r.Use(applicationMiddleWare(cfg))
+
+	// Auth Routes
+	r.Route("/login", func(r chi.Router) {
+		r.With(middleware.InterceptJson(map[string][]predicate.Predicate[string]{
+			"email":    {predicate.IsNotEmpty, predicate.EmailIsValid},
+			"password": {predicate.IsNotEmpty},
+		})).Post("/", api.HandleLogin)
+	})
+
+	// User Routes
 	r.Route("/users", func(r chi.Router) {
 		r.Get("/", api.HandleGetAllUsers)
 		r.With(middleware.InterceptJson(map[string][]predicate.Predicate[string]{
@@ -59,6 +78,8 @@ func main() {
 			})
 		})
 	})
+
+	// File Routes
 	r.Route("/files", func(r chi.Router) {
 		r.Get("/", api.HandleGetAllFiles)
 		r.Post("/", api.HandleCreateFile)
