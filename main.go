@@ -24,7 +24,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	db, err := cfg.Connection()
+	db, err := cfg.DatabaseConnection()
 	if err != nil {
 		log.Fatal(err)
 	}

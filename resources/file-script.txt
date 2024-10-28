@@ -1,0 +1,45 @@
+# Set the URL of the API endpoint
+$url = "http://localhost:8080/files/"
+$filePath = "C:\Users\justi\Downloads\test.csv"  #
+$userid = "2"  # Set userid to 2
+
+# Check if the file exists
+if (-Not (Test-Path $filePath)) {
+    Write-Host "File not found at $filePath"
+    return
+}
+
+# Read the file content
+$fileContent = [System.IO.File]::ReadAllBytes($filePath)
+
+# Create a unique boundary
+$boundary = "---------------------------" + [System.Guid]::NewGuid().ToString()
+
+# Build the multipart form body
+$body = @()
+$body += "--$boundary"
+$body += 'Content-Disposition: form-data; name="userid"'
+$body += ''
+$body += $userid
+$body += "--$boundary"
+$body += 'Content-Disposition: form-data; name="file"; filename="test.csv"'  # Updated filename
+$body += 'Content-Type: text/csv'  # Set content type for CSV
+$body += ''
+$body += [System.Text.Encoding]::UTF8.GetString($fileContent)
+$body += "--$boundary--"
+
+# Convert the body to a byte array
+$bodyBytes = [System.Text.Encoding]::UTF8.GetBytes(($body -join "`r`n"))
+
+# Set the headers
+$headers = @{
+    "API-KEY" = "test-2"
+}
+
+# Send the request
+try {
+    Invoke-WebRequest -Uri $url -Method Post -Body $bodyBytes -ContentType "multipart/form-data; boundary=$boundary" -Headers $headers
+    Write-Host "File uploaded successfully."
+} catch {
+    Write-Host "Error during upload: $_"
+}
