@@ -2,13 +2,19 @@ package handler
 
 import (
 	"api-3390/container"
+	"api-3390/container/predicate"
+	"api-3390/user"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
-	"strconv"
-
 	"golang.org/x/crypto/bcrypt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 )
 
 // User Handlers
@@ -138,36 +144,186 @@ func (a *API) HandleGetAllFiles(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) HandleCreateFile(w http.ResponseWriter, r *http.Request) {
-	var file container.File
-	err := json.NewDecoder(r.Body).Decode(&file)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	err = a.Services.FileService.CreateFile(&file)
+	err := r.ParseMultipartForm(10 << 20)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	userid := r.FormValue("userid")
+	if userid == "" {
+		http.Error(w, "userid is required", http.StatusBadRequest)
+		return
+	}
+	b := predicate.AllowedCharacters.Test(userid) && predicate.NonNegative.Test(userid)
+	if !b {
+		http.Error(w, "userid is required", http.StatusBadRequest)
+		return
+	}
+	id, err := strconv.ParseUint(userid, 10, 32)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	file, fileHeader, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "unable to create file", http.StatusInternalServerError)
+		return
+	}
+	var f = &container.File{
+		UserID: uint32(id),
+		Name:   fileHeader.Filename,
+	}
+	filePath := filepath.Join("./uploads", userid) // Change as needed
+	path := filepath.Join(filePath, f.Name)
+	if !validFileExtension.Test(path) {
+		http.Error(w, validFileExtension.ErrorMessage(f.Name), http.StatusBadRequest)
+		return
+	}
+	if err := os.MkdirAll(filePath, os.ModePerm); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	outFile, err := os.Create(path)
+	if err != nil {
+		http.Error(w, "Unable to create file", http.StatusInternalServerError)
+		return
+	}
+	defer outFile.Close()
+	_, err = io.Copy(outFile, file)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	_, err = fmt.Fprintf(w, "File uploaded successfully: %s", fileHeader.Filename)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if b, err := a.Services.FileService.UserHasFileEntry(f); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	} else if !b {
+		if err := a.Services.FileService.CreateFileEntry(f); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		if err := a.Services.FileService.UpdateFileEntry(f); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 }
-
 func (a *API) HandleGetFileById(w http.ResponseWriter, r *http.Request) {
 	id, err := getStringId("file_id", r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	f, err := a.Services.FileService.GetFileById(id)
+	file, err := a.Services.FileService.GetFileById(id)
+	if file == nil || err != nil {
+		http.Error(w, "file not found", http.StatusNotFound)
+		return
+	}
+	filePath := filepath.Join("./uploads", strconv.Itoa(int(file.UserID)), file.Name)
+	columnsParam := r.URL.Query().Get("columns")
+	columns := strings.Split(columnsParam, ",")
+	p := QueryParams{
+		Operation: r.URL.Query().Get("operation"),
+		Column:    columns,
+	}
+	qb := NewQueryBuilder().
+		AddQuery("average", a.calculateAverage).
+		AddQuery("sum", a.calculateSum).
+		SetDefaultCase(func(w http.ResponseWriter, _ []string, filePath string) {
+			w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filePath))
+			w.Header().Set("Content-Type", "application/octet-stream")
+			if _, err := os.Stat(filePath); os.IsNotExist(err) {
+				http.Error(w, "file not found", http.StatusNotFound)
+				return
+			}
+			f, err := os.Open(filePath)
+			if err != nil {
+				http.Error(w, "unable to open file", http.StatusInternalServerError)
+				return
+			}
+			defer f.Close()
+			if _, err := io.Copy(w, f); err != nil {
+				http.Error(w, "unable to send file", http.StatusInternalServerError)
+			}
+		})
+	qb.Build(w, p, filePath)
+}
+func (a *API) calculateSum(w http.ResponseWriter, columnName []string, filePath string) {
+	// Open the CSV file
+	file, err := os.Open(filePath)
 	if err != nil {
+		http.Error(w, "file not found", http.StatusNotFound)
+		return
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+
+	// Read the header
+	headers, err := reader.Read()
+	if err != nil {
+		http.Error(w, "error reading file", http.StatusInternalServerError)
+		return
+	}
+
+	// Find the index of the specified column
+	columnIndex := -1
+	for i, header := range headers {
+		if strings.EqualFold(header, columnName[0]) {
+			columnIndex = i
+			break
+		}
+	}
+
+	if columnIndex == -1 {
+		http.Error(w, "column not found", http.StatusBadRequest)
+		return
+	}
+
+	// Variables for total sum and count
+	var total float64
+	var count int
+
+	// Read the records and calculate the total
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break // End of file reached
+		}
+		if err != nil {
+			http.Error(w, "error reading file", http.StatusInternalServerError)
+			return
+		}
+
+		// Parse the value in the specified column
+		value, err := strconv.ParseFloat(record[columnIndex], 64)
+		if err != nil {
+			http.Error(w, "invalid data format", http.StatusBadRequest)
+			return
+		}
+
+		total += value
+		count++
+	}
+
+	// Return the sum as JSON
+	response := map[string]float64{"sum": total}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(f); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+	fmt.Fprintf(w, `{"average": %f}`, average)
 }
-
 func (a *API) HandleDeleteFileById(w http.ResponseWriter, r *http.Request) {
 	id, err := getStringId("file_id", r)
 	if err != nil {
@@ -201,7 +357,7 @@ func (a *API) HandleUpdateFileById(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 	updatedFile.ID = id
-	if err := a.Services.FileService.UpdateFile(&updatedFile); err != nil {
+	if err := a.Services.FileService.UpdateFileEntry(&updatedFile); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -222,6 +378,19 @@ func (a *API) HandleGetUserFiles(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(files); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+var validFileExtension = predicate.Predicate[string]{
+	Test: func(t string) bool {
+		ext := strings.ToLower(filepath.Ext(t))
+		for _, validExt := range user.ValidExtensions {
+			if ext == validExt {
+				return true
+			}
+		}
+		return false
+	},
+	ErrorMessage: predicate.ErrorMessage(fmt.Sprintf("the file is not an accepted file format, these are the accepted files: %s", user.ValidExtensions)),
 }
 
 // Helper Functions
