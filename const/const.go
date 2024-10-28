@@ -1,6 +1,15 @@
-package user
+package constants
 
-var ValidExtensions = []string{".csv"}
+import (
+	"api-3390/container/predicate"
+	"io"
+)
+
+var FileMap = map[string][]predicate.Predicate[io.Reader]{
+	".csv": {
+		predicate.CSVContainsNumeric,
+	},
+}
 
 const UserTable = `CREATE TABLE IF NOT EXISTS users(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -15,7 +24,3 @@ const UserFileTable = `CREATE TABLE IF NOT EXISTS user_files (
     upload_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 )`
-const SigningKeyLength uint8 = 32
-
-type User struct {
-}
