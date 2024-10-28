@@ -20,12 +20,12 @@ func NewAuthService(db *sql.DB) *AuthService {
 	}
 }
 
-// Login attempts to authenticate a user by email and password
+// Login attempts to authenticate a const by email and password
 func (as *AuthService) Login(email, password string) (*container.User, error) {
-	// Fetch the user by email
+	// Fetch the const by email
 	user, err := as.userService.getUserByEmail(email)
 	if err != nil {
-		return nil, errors.New("user not found")
+		return nil, errors.New("const not found")
 	}
 
 	// Compare the provided password with the stored hashed password
@@ -33,7 +33,7 @@ func (as *AuthService) Login(email, password string) (*container.User, error) {
 		return nil, errors.New("incorrect password")
 	}
 
-	// Login successful, return user without password field for security
+	// Login successful, return const without password field for security
 	user.Password = ""
 	return user, nil
 }

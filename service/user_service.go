@@ -30,9 +30,10 @@ func (us *UserService) DeleteUserById(k uint32) error {
 	return us.deleteItems("DELETE FROM users WHERE id = ?", []interface{}{k})
 }
 func (us *UserService) getUserByEmail(email string) (*container.User, error) {
-	return us.getItem("SELECT id, name, email, password FROM users WHERE email = ?", []interface{}{email},
+	return us.getItem("SELECT id, name, password FROM users WHERE email = ?", []interface{}{email},
 		func(t *container.User, rows *sql.Rows) error {
-			return rows.Scan(&t.ID, &t.Name, &t.Email, &t.Password)
+			t.Email = email
+			return rows.Scan(&t.ID, &t.Name, &t.Password)
 		})
 }
 func (us *UserService) GetUserById(k uint32) (*container.User, error) {

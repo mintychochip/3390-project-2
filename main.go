@@ -2,18 +2,18 @@ package main
 
 import (
 	"api-3390/config"
+	"api-3390/const"
 	"api-3390/container/predicate"
 	"api-3390/handler"
 	"api-3390/handler/middleware"
 	"api-3390/service"
-	"api-3390/user"
 	"fmt"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/cors"
 	"log"
 	"net/http"
 	"os"
-
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/cors"
+	"strings"
 )
 
 const UploadPath = "./uploads/"
@@ -32,11 +32,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error enabling foreign keys: %v", err)
 	}
-	_, err = db.Exec(user.UserTable)
+	_, err = db.Exec(constants.UserTable)
 	if err != nil {
 		log.Fatal(err)
 	}
-	_, err = db.Exec(user.UserFileTable)
+	_, err = db.Exec(constants.UserFileTable)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -82,7 +82,10 @@ func main() {
 	// File Routes
 	r.Route("/files", func(r chi.Router) {
 		r.Get("/", api.HandleGetAllFiles)
-		r.Post("/", api.HandleCreateFile)
+		r.Post("/", api.HandleCreateFile(constants.FileMap,
+			[]predicate.Predicate[string]{
+				predicate.NonNegative,
+				predicate.AllowedCharacters}))
 		r.Route("/{file_id}", func(r chi.Router) {
 			r.Use(middleware.URLParam("file_id", predicate.AllowedCharacters, predicate.NonNegative))
 			r.Get("/", api.HandleGetFileById)
@@ -99,7 +102,7 @@ func main() {
 func applicationMiddleWare(cfg *config.Config) func(http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			apiKey := r.Header.Get("X-API-KEY")
+			apiKey := r.Header.Get(strings.ToUpper(cfg.ReferenceHeader))
 			if apiKey != cfg.ReferenceKey {
 				http.Error(w, "Forbidden", http.StatusForbidden)
 				if apiKey == "" {

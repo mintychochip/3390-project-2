@@ -1,5 +1,6 @@
 {
   "address" : "localhost:8080",
   "path": "resources/sqlite.db",
-  "reference_key": "test-2"
+  "reference_key": "test-2",
+  "reference_header": "api-key"
 }

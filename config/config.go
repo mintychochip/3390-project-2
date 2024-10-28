@@ -8,9 +8,10 @@ import (
 )
 
 type Config struct {
-	Address      string `json:"address"`
-	Path         string `json:"path"`
-	ReferenceKey string `json:"reference_key"`
+	Address         string `json:"address"`
+	Path            string `json:"path"`
+	ReferenceKey    string `json:"reference_key"`
+	ReferenceHeader string `json:"reference_header"`
 }
 
 func NewConfig() (*Config, error) {
@@ -53,8 +54,9 @@ func loadFromFile(path string) (*Config, error) {
 
 func loadFromEnv() (*Config, error) {
 	return &Config{
-		Address:      os.Getenv("ADDRESS"),
-		Path:         os.Getenv("PATH"),
-		ReferenceKey: os.Getenv("REFERENCE_KEY"),
+		Address:         os.Getenv("ADDRESS"),
+		Path:            os.Getenv("PATH"),
+		ReferenceKey:    os.Getenv("REFERENCE_KEY"),
+		ReferenceHeader: os.Getenv("REFERENCE_HEADER"),
 	}, nil
 }
