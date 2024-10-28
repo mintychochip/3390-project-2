@@ -17,6 +17,7 @@ import (
 	"strings"
 )
 
+// User Handlers
 func (a *API) HandleGetAllUsers(w http.ResponseWriter, r *http.Request) {
 	us, err := a.Services.UserService.GetAllUsers()
 	if err != nil {
@@ -105,18 +106,30 @@ func (a *API) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
-func getStringId(key string, r *http.Request) (uint32, error) {
-	val, ok := r.Context().Value(key).(string)
-	if !ok {
-		return 0, errors.New("un defined value")
-	}
-	id, err := strconv.Atoi(val)
-	if err != nil {
-		return 0, err
-	}
-	return uint32(id), nil
+
+// Auth Handlers
+type LoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
+func (a *API) HandleLogin(w http.ResponseWriter, r *http.Request) {
+	var req LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		return
+	}
+	u, err := a.Services.AuthService.Login(req.Email, req.Password)
+	if err != nil {
+		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(u)
+}
+
+// File Handlers
 func (a *API) HandleGetAllFiles(w http.ResponseWriter, r *http.Request) {
 	us, err := a.Services.FileService.GetAllFiles()
 	if err != nil {
@@ -305,71 +318,8 @@ func (a *API) calculateSum(w http.ResponseWriter, columnName []string, filePath 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
-
-func (a *API) calculateAverage(w http.ResponseWriter, columnName []string, filePath string) {
-
-	file, err := os.Open(filePath)
-	if err != nil {
-		http.Error(w, "file not found", http.StatusNotFound)
 		return
 	}
-	defer file.Close()
-
-	reader := csv.NewReader(file)
-
-	headers, err := reader.Read()
-	if err != nil {
-		http.Error(w, "error reading file", http.StatusInternalServerError)
-		return
-	}
-
-	columnIndex := -1
-	for i, header := range headers {
-		if strings.EqualFold(header, columnName[0]) {
-			columnIndex = i
-			break
-		}
-	}
-
-	if columnIndex == -1 {
-		http.Error(w, "column not found", http.StatusBadRequest)
-		return
-	}
-
-	var total float64
-	var count int
-
-	for {
-		record, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			http.Error(w, "error reading file", http.StatusInternalServerError)
-			return
-		}
-
-		// Parse the value in the specified column
-		value, err := strconv.ParseFloat(record[columnIndex], 64)
-		if err != nil {
-			http.Error(w, "invalid data format", http.StatusBadRequest)
-			return
-		}
-
-		total += value
-		count++
-	}
-
-	if count == 0 {
-		http.Error(w, "no valid data to average", http.StatusBadRequest)
-		return
-	}
-
-	average := total / float64(count)
-
-	// Return the average as JSON
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, `{"average": %f}`, average)
@@ -441,4 +391,17 @@ var validFileExtension = predicate.Predicate[string]{
 		return false
 	},
 	ErrorMessage: predicate.ErrorMessage(fmt.Sprintf("the file is not an accepted file format, these are the accepted files: %s", user.ValidExtensions)),
+}
+
+// Helper Functions
+func getStringId(key string, r *http.Request) (uint32, error) {
+	val, ok := r.Context().Value(key).(string)
+	if !ok {
+		return 0, errors.New("un defined value")
+	}
+	id, err := strconv.Atoi(val)
+	if err != nil {
+		return 0, err
+	}
+	return uint32(id), nil
 }
