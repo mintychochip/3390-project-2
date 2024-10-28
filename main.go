@@ -75,6 +75,11 @@ func main() {
 			})).Put("/", api.HandleUpdateUserById)
 			r.Route("/files", func(r chi.Router) {
 				r.Get("/", api.HandleGetUserFiles)
+				r.Route("/{file_name}", func(r chi.Router) {
+					r.Use(middleware.URLParam("file_name", predicate.AllowedCharacters))
+					r.Delete("/", api.HandleDeleteUserFileByName)
+					r.Get("/", api.HandleGetUserFileByName)
+				})
 			})
 		})
 	})
@@ -89,7 +94,6 @@ func main() {
 		r.Route("/{file_id}", func(r chi.Router) {
 			r.Use(middleware.URLParam("file_id", predicate.AllowedCharacters, predicate.NonNegative))
 			r.Get("/", api.HandleGetFileById)
-			r.Delete("/", api.HandleDeleteFileById)
 			r.Put("/", api.HandleUpdateFileById)
 		})
 	})

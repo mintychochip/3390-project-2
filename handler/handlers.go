@@ -339,17 +339,71 @@ func (a *API) calculateSum(w http.ResponseWriter, columnName []string, filePath 
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
-func (a *API) HandleDeleteFileById(w http.ResponseWriter, r *http.Request) {
-	id, err := getStringId("file_id", r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+func (a *API) HandleDeleteUserFileByName(w http.ResponseWriter, r *http.Request) {
+	userid, err := getStringId("user_id", r)
+	fileName := r.Context().Value("file_name").(string)
+	file, err := a.Services.FileService.GetUserFileByName(userid, fileName)
+	if file == nil || err != nil {
+		http.Error(w, "file not found", http.StatusNotFound)
 		return
 	}
-	if err := a.Services.FileService.DeleteFileById(id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	filePath := filepath.Join("./uploads", strconv.Itoa(int(userid)), file.Name)
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		http.Error(w, "file not found", http.StatusNotFound)
+		return
+	}
+	err = os.Remove(filePath)
+	if err != nil {
+		http.Error(w, "unable to delete file", http.StatusInternalServerError)
+		return
+	}
+	fmt.Println(file.ID)
+	if err := a.Services.FileService.DeleteFileById(file.ID); err != nil {
+		http.Error(w, "unable to delete file", http.StatusInternalServerError)
+		return
 	}
 }
 
+func (a *API) HandleGetUserFileByName(w http.ResponseWriter, r *http.Request) {
+	userid, err := getStringId("user_id", r)
+	fileName := r.Context().Value("file_name").(string)
+	file, err := a.Services.FileService.GetUserFileByName(userid, fileName)
+	if file == nil || err != nil {
+		http.Error(w, "file not found", http.StatusNotFound)
+		return
+	}
+	filePath := filepath.Join("./uploads", strconv.Itoa(int(userid)), file.Name)
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		http.Error(w, "file not found", http.StatusNotFound)
+		return
+	}
+	columnsParam := r.URL.Query().Get("columns")
+	columns := strings.Split(columnsParam, ",")
+	p := QueryParams{
+		Operation: r.URL.Query().Get("operation"),
+		Column:    columns,
+	}
+	qb := NewQueryBuilder().
+		AddQuery("sum", a.calculateSum).
+		SetDefaultCase(func(w http.ResponseWriter, _ []string, filePath string) {
+			w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filePath))
+			w.Header().Set("Content-Type", "application/octet-stream")
+			if _, err := os.Stat(filePath); os.IsNotExist(err) {
+				http.Error(w, "file not found", http.StatusNotFound)
+				return
+			}
+			f, err := os.Open(filePath)
+			if err != nil {
+				http.Error(w, "unable to open file", http.StatusInternalServerError)
+				return
+			}
+			defer f.Close()
+			if _, err := io.Copy(w, f); err != nil {
+				http.Error(w, "unable to send file", http.StatusInternalServerError)
+			}
+		})
+	qb.Build(w, p, filePath)
+}
 func (a *API) HandleUpdateFileById(w http.ResponseWriter, r *http.Request) {
 	id, err := getStringId("file_id", r)
 	fmt.Println(id)

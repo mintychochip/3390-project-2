@@ -40,6 +40,15 @@ func (fs *FileService) GetFileById(k uint32) (*container.File, error) {
 			return rows.Scan(&f.UserID, &f.Name, &f.UploadTime)
 		})
 }
+
+func (fs *FileService) GetUserFileByName(k uint32, fileName string) (*container.File, error) {
+	return fs.getItem("SELECT id,upload_time FROM user_files WHERE user_id=? AND name=? ", []interface{}{k, fileName},
+		func(f *container.File, rows *sql.Rows) error {
+			f.UserID = k
+			f.Name = fileName
+			return rows.Scan(&f.ID, &f.UploadTime)
+		})
+}
 func (fs *FileService) GetAllFiles() ([]*container.File, error) {
 	return fs.getAllItems("SELECT * FROM user_files", []interface{}{}, func(t *container.File, rows *sql.Rows) error {
 		return rows.Scan(&t.ID, &t.UserID, &t.Name, &t.UploadTime)
